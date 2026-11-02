@@ -19,8 +19,8 @@ None is copied into this repository. They are installed by `pip` from `pyproject
 | zstandard | Reads the Lichess `.zst` files | BSD-3-Clause | https://pypi.org/pypi/zstandard/json |
 | pytest (dev only) | Tests | MIT | https://pypi.org/pypi/pytest/json |
 
-Not confirmed: the `cu130` PyTorch wheels from `download.pytorch.org` bundle NVIDIA CUDA libraries that carry
-NVIDIA's own license terms. I did not read those terms.
+The `cu130` PyTorch wheels from `download.pytorch.org` bundle NVIDIA CUDA libraries that carry NVIDIA's own license
+terms. I did not read those terms.
 
 ## External programs
 
@@ -52,30 +52,46 @@ checkpoints were not trained on them.
 
 ## Ported code
 
-`src/wombat/external/chessbench.py` is a PyTorch port of the ChessBench 9M model and tokenizer from
+`src/wombat/external/chessbench.py` is a PyTorch port of the ChessBench 9M model and tokenizer. The original is
 google-deepmind/searchless_chess, Apache License 2.0, Copyright DeepMind Technologies Limited
-(https://github.com/google-deepmind/searchless_chess, file `src/tokenizer.py` header read 2026-11-02). It keeps the
-attribution in the module docstring and in `NOTICE`. `src/wombat/data/chessbench.py` reads the same `.bag` container
+(https://github.com/google-deepmind/searchless_chess, file `src/tokenizer.py` header read 2026-11-02). The port keeps
+the attribution in the module docstring and in `NOTICE`. `src/wombat/data/chessbench.py` reads the same `.bag` container
 format with its own code. The ChessBench paper is Ruoss et al., "Amortized Planning with Large-Scale Transformers:
 A Case Study on Chess", NeurIPS 2024.
 
 ## Conflicts and open points with the Apache-2.0 license
 
-- **python-chess is GPL-3.0-or-later and Wombat imports it.** The GNU GPL FAQ says that when a program links to a GPL
-  library, "the terms of the GPL apply to the entire combination", and that "the software modules that link with the
-  library may be under various GPL compatible licenses, but the work as a whole must be licensed under the GPL"
-  (https://www.gnu.org/licenses/gpl-faq.html, entry `IfLibraryIsGPL`). The FSF lists Apache 2.0 as "compatible with
-  version 3 of the GNU GPL" and not with GPL version 2 (https://www.gnu.org/licenses/license-list.html, entry
-  `apache2`). python-chess allows version 3 or later, so the pair is compatible. In practice, Wombat's source stays
-  Apache-2.0 and is published without python-chess. Anyone who ships Wombat together with python-chess, for example
-  in a container image, a bundled app or a Hugging Face Space, ships a combined work that has to meet the GPL-3.0 terms
-  as a whole. Removing the dependency would take a replacement for the board, move generation and PGN code.
-- **Stockfish, Cute Chess and Ordo are GPL programs run as separate processes.** No code from them is in this
-  repository, so the Apache-2.0 license does not conflict. A package that bundles their binaries has to follow the GPL
-  for those binaries.
-- **The ported model file carries Apache-2.0 attribution.** Redistributing it requires `LICENSE` and `NOTICE`, which
-  this repository includes.
-- **ChessBench weights and data (CC BY 4.0) need attribution** wherever they are redistributed. This repository
-  redistributes neither.
-- **Not confirmed:** the NVIDIA CUDA library terms in the `cu130` wheels, the Stockfish network license, and the
-  exact CC BY and CC0 split inside ChessBench's data (the README does not say which records are which).
+### python-chess
+
+python-chess is GPL-3.0-or-later, and Wombat imports it. The GNU GPL FAQ covers a program that links to a GPL library.
+It says "the terms of the GPL apply to the entire combination"
+(https://www.gnu.org/licenses/gpl-faq.html, entry `IfLibraryIsGPL`). The modules that link with the library "may be
+under various GPL compatible licenses". But "the work as a whole must be licensed under the GPL". The FSF lists
+Apache 2.0 as "compatible with version 3 of the GNU GPL" (https://www.gnu.org/licenses/license-list.html, entry
+`apache2`). It is not compatible with GPL version 2. python-chess allows version 3 or later, so the pair is
+compatible.
+
+Wombat's source stays Apache-2.0 and is published without python-chess. Anyone who ships Wombat together with
+python-chess ships a combined work. That work has to meet the GPL-3.0 terms as a whole. This covers a container image,
+a bundled app and a Hugging Face Space alike. Removing the dependency would take a replacement for the board, move
+generation and PGN code.
+
+### Stockfish, Cute Chess and Ordo
+
+These are GPL programs that Wombat runs as separate processes. No code from them is in this repository, so the
+Apache-2.0 license does not conflict. A package that bundles their binaries has to follow the GPL for those binaries.
+
+### The ported model file
+
+`src/wombat/external/chessbench.py` carries Apache-2.0 attribution. Redistributing it requires `LICENSE` and `NOTICE`,
+which this repository includes.
+
+### ChessBench weights and data
+
+They are CC BY 4.0 and need attribution wherever they are redistributed. This repository redistributes neither.
+
+### Not confirmed
+
+I did not confirm three things. They are the NVIDIA CUDA library terms in the `cu130` wheels and the Stockfish network
+license. The third is the exact CC BY and CC0 split inside ChessBench's data, since their README does not say which
+records are which.
