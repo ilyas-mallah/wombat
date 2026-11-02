@@ -1,0 +1,13 @@
+Wombat
+Copyright 2026 Ilyas Mallah
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+src/wombat/external/chessbench.py is a PyTorch port of the ChessBench 9M action-value
+transformer and its tokenizer from google-deepmind/searchless_chess
+(https://github.com/google-deepmind/searchless_chess), Copyright DeepMind Technologies
+Limited, licensed under the Apache License, Version 2.0. The port changes the framework
+(JAX to PyTorch) and the interface.
+
+Third-party software, data and tools used by Wombat, with their licenses, are listed in
+THIRD_PARTY.md. None of them is copied into this repository apart from the port above.
