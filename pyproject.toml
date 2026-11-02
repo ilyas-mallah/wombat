@@ -34,3 +34,6 @@ where = ["src"]
 addopts = "-q"
 testpaths = ["tests"]
 
+
+[tool.setuptools.package-data]
+wombat = ["visualizer/static/*.html"]
