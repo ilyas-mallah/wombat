@@ -1,0 +1,9 @@
+model:
+  d_model: 192
+  attention_heads: 6
+  prelude_blocks: 3
+  recurrent_blocks: 2
+  mlp_width: 768
+  latent_tokens: 32
+  # Smooth per-token RMS cap for each attention/MLP residual branch.
+  max_residual_update: 0.25

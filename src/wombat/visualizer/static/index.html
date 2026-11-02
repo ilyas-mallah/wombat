@@ -1,0 +1,1653 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wombat Visualizer</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  --bg: #16181c;
+  --panel: #1f2228;
+  --panel-2: #262a31;
+  --line: #333842;
+  --text: #e6e8eb;
+  --muted: #9aa1ab;
+  --accent: #6fa8ff;
+  --good: #5cc281;
+  --inaccuracy: #e7c35a;
+  --mistake: #f0903f;
+  --blunder: #ec5a5a;
+  --light: #eed9b5;
+  --dark: #b58863;
+  --board: min(calc(100vh - 190px), calc(100vw - 100px), 600px);
+}
+/* Leave room for the side panel beside the board on wide screens. */
+@media (min-width: 900px) {
+  :root { --board: min(calc(100vh - 190px), calc(100vw - 560px), 640px); }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 system-ui, "Segoe UI", Roboto, sans-serif;
+}
+header {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+}
+header h1 { font-size: 18px; margin: 0; letter-spacing: .5px; }
+header h1 span { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 6px; }
+.tabs { display: flex; gap: 4px; }
+.tabs button { background: transparent; border: 1px solid transparent; color: var(--muted); }
+.tabs button.active { background: var(--panel-2); border-color: var(--line); color: var(--text); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+#server-note { color: var(--muted); font-size: 12px; }
+main {
+  display: flex; gap: 20px; padding: 16px; align-items: flex-start; flex-wrap: wrap;
+  justify-content: center;
+}
+.board-column { display: flex; flex-direction: column; gap: 10px; width: calc(var(--board) + 68px); max-width: 100%; }
+.board-row { display: flex; gap: 8px; }
+.side { width: 380px; max-width: 100%; display: flex; flex-direction: column; gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+.card h2 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted);
+  margin: 0 0 10px; display: flex; justify-content: space-between; gap: 8px;
+}
+.card h2 span { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.card h3 { font-size: 12px; color: var(--muted); font-weight: 600; margin: 12px 0 6px; }
+.intro { color: var(--muted); font-size: 13px; margin: -4px 0 10px; }
+button {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: #2f5ea8; border-color: #3d6fbd; }
+button.link { background: transparent; border: none; color: var(--accent); padding: 0; }
+select, input[type=number] {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 6px; font: inherit; max-width: 100%;
+}
+input[type=number] { width: 80px; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+label { color: var(--muted); }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.field:last-child { margin-bottom: 0; }
+.field-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.field-row:last-child { margin-bottom: 0; }
+.field .top { display: flex; justify-content: space-between; }
+.value { color: var(--text); font-variant-numeric: tabular-nums; }
+.hint { color: var(--muted); font-size: 12px; }
+.check { display: inline-flex; align-items: center; gap: 6px; color: var(--text); cursor: pointer; }
+.hidden { display: none !important; }
+
+/* Board */
+#board-wrap { position: relative; width: var(--board); height: var(--board); }
+#board {
+  display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr);
+  width: 100%; height: 100%; border-radius: 4px; overflow: hidden; user-select: none;
+  box-shadow: 0 6px 24px rgba(0,0,0,.45);
+}
+.sq { position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.sq.light { background: var(--light); }
+.sq.dark { background: var(--dark); }
+.sq.last::before, .sq.sel::before, .sq.check::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+}
+.sq.last::before { background: rgba(155, 199, 0, .38); }
+.sq.sel::before { background: rgba(20, 110, 60, .55); }
+.sq.check::before { background: radial-gradient(circle, rgba(255,0,0,.85) 0%, rgba(231,0,0,.45) 35%, rgba(169,0,0,0) 70%); }
+.sq.target::after {
+  content: ""; position: absolute; width: 28%; height: 28%; border-radius: 50%;
+  background: rgba(20, 85, 30, .45); pointer-events: none;
+}
+.sq.target.occupied::after {
+  width: 100%; height: 100%; border-radius: 0; background: radial-gradient(transparent 0%, transparent 79%, rgba(20,85,30,.5) 80%);
+}
+.coord { position: absolute; font-size: calc(var(--board) / 48); font-weight: 600; pointer-events: none; }
+.coord.rank { top: 2px; left: 3px; }
+.coord.file { bottom: 1px; right: 4px; }
+.sq.light .coord { color: var(--dark); }
+.sq.dark .coord { color: var(--light); }
+.piece {
+  font-family: "Segoe UI Symbol", "DejaVu Sans", "Noto Sans Symbols 2", "Arial Unicode MS", serif;
+  font-size: calc(var(--board) / 8 * .78); line-height: 1; position: relative; z-index: 1;
+  pointer-events: none;
+}
+.piece.w { color: #fbfbf8; text-shadow: 0 0 1px #000, 0 0 1px #000, 0 0 2px #000, 1px 1px 2px rgba(0,0,0,.4); }
+.piece.b { color: #1d1d1d; text-shadow: 0 0 1px rgba(255,255,255,.55), 1px 1px 2px rgba(0,0,0,.35); }
+#arrows { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+#promotion {
+  position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.45);
+}
+#promotion .choices { display: flex; gap: 6px; background: var(--panel); padding: 10px; border-radius: 8px; }
+#promotion button { font-size: calc(var(--board) / 12); line-height: 1; padding: 6px 10px; background: var(--light); }
+#banner {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 3;
+  padding: 10px 18px; border-radius: 8px; font-size: 20px; font-weight: 600; text-align: center;
+  background: rgba(20,22,26,.9); border: 1px solid var(--line); pointer-events: none;
+}
+#banner small { display: block; font-size: 13px; font-weight: 400; color: var(--muted); white-space: nowrap; }
+#banner.ok { color: var(--good); }
+#banner.bad { color: var(--blunder); }
+
+/* Eval bars: Wombat's own, and Stockfish's when enabled */
+.bar-column { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.bar-caption { font-size: 10px; color: var(--muted); height: 13px; line-height: 13px; }
+.evalbar {
+  width: 26px; height: calc(var(--board) - 16px); border-radius: 4px; overflow: hidden; position: relative;
+  background: #3a3a3a; display: flex; flex-direction: column; justify-content: flex-end;
+}
+.evalbar.flipped { flex-direction: column-reverse; }
+.evalbar .fill { background: #f2f2f2; height: 50%; transition: height .35s ease; }
+.evalbar .label {
+  position: absolute; left: 0; right: 0; text-align: center; font-size: 10px; font-weight: 700;
+  color: #111; bottom: 3px; letter-spacing: -.3px;
+}
+.evalbar .label.dark { color: #eee; }
+.evalbar.untrained { background: repeating-linear-gradient(45deg, #34373d 0 6px, #2a2d32 6px 12px); }
+.evalbar.untrained .fill { display: none; }
+.evalbar.untrained .label { color: var(--muted); top: 50% !important; bottom: auto !important; transform: translateY(-50%); }
+.untrained-note { color: var(--mistake); }
+#status {
+  min-height: 38px; padding: 8px 12px; border-radius: 8px; background: var(--panel);
+  border: 1px solid var(--line); color: var(--muted);
+}
+#status b { color: var(--text); }
+#error { color: var(--blunder); font-size: 12px; }
+#error:empty { display: none; }
+
+/* Analysis */
+.headline { font-size: 15px; margin-bottom: 8px; }
+.headline b { color: var(--accent); }
+.cand { display: grid; grid-template-columns: 60px 1fr 46px 42px 14px; gap: 8px; align-items: center; padding: 2px 0; }
+.cand.head { font-size: 11px; color: var(--muted); padding-bottom: 0; }
+.cand .ev { text-align: right; font-variant-numeric: tabular-nums; }
+.cand .san { font-weight: 600; }
+.cand .bar { height: 10px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.cand .bar div { height: 100%; background: var(--accent); }
+.cand .pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.cand.chosen .san { color: var(--accent); }
+.strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.chip {
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 2px; text-align: center; background: var(--panel-2);
+}
+.chip .t { font-size: 11px; color: var(--muted); }
+.chip .m { font-weight: 600; }
+.chip .p { font-size: 11px; color: var(--muted); }
+.chip.same { border-color: var(--accent); }
+.chip.solves { background: rgba(92, 194, 129, .18); border-color: var(--good); }
+.chip.fails { background: rgba(236, 90, 90, .14); border-color: rgba(236, 90, 90, .6); }
+.verdict { margin-top: 8px; font-size: 12px; color: var(--muted); }
+.empty { color: var(--muted); font-style: italic; }
+
+/* Explain: attention shading and occlusion badges drawn on the board */
+.sq .heat { position: absolute; inset: 0; background: rgb(30, 100, 255); pointer-events: none; }
+.sq .impact {
+  position: absolute; top: 2px; right: 2px; z-index: 2; pointer-events: none; color: #fff;
+  font-size: calc(var(--board) / 52); font-weight: 700; line-height: 1.3; padding: 0 3px; border-radius: 3px;
+  background: rgba(176, 37, 37, .92); font-variant-numeric: tabular-nums;
+}
+.sq .impact.up { background: rgba(21, 120, 27, .92); }
+.strip.six { grid-template-columns: repeat(6, 1fr); }
+.chip .q { font-size: 11px; color: var(--accent); }
+.tokens { display: flex; flex-wrap: wrap; gap: 4px; }
+.tokens > span { padding: 1px 6px; border-radius: 4px; background: var(--panel-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.occ { display: grid; grid-template-columns: 58px 1fr 48px 92px; gap: 8px; align-items: center; padding: 1px 0; font-size: 13px; }
+.occ .diverge { position: relative; height: 10px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.occ .diverge::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.occ .diverge div { position: absolute; top: 0; bottom: 0; }
+.occ .down { background: var(--blunder); }
+.occ .rise { background: var(--good); }
+.occ .num { text-align: right; font-variant-numeric: tabular-nums; }
+.occ .then { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini { font-size: 15px; background: var(--light); border-radius: 3px; padding: 0 2px; margin-right: 3px; }
+#moves .mv { cursor: pointer; }
+#moves .mv:hover { text-decoration: underline; }
+#moves .mv.explained { outline: 1px solid var(--accent); }
+
+/* Moves */
+#moves { max-height: 180px; overflow-y: auto; display: grid; grid-template-columns: 36px 1fr 1fr; row-gap: 2px; }
+#moves .no { color: var(--muted); }
+#moves .mv { padding: 1px 4px; border-radius: 4px; }
+#moves .mv.last { background: var(--panel-2); }
+.label-good { color: var(--text); }
+.label-inaccuracy { color: var(--inaccuracy); }
+.label-mistake { color: var(--mistake); }
+.label-blunder { color: var(--blunder); }
+.mark-ok { color: var(--good); }
+.mark-bad { color: var(--blunder); }
+.who { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+.who-model { background: var(--accent); }
+.who-human { background: #c9a2ff; }
+.who-stockfish { background: #7bd88f; }
+.who-solution, .who-reply { background: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+#summary { margin-top: 8px; font-size: 12px; color: var(--muted); }
+#summary b { color: var(--text); }
+.tally { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.puzzle-marks { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.puzzle-marks span { padding: 1px 6px; border-radius: 4px; background: var(--panel-2); font-size: 12px; }
+table.history { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.history th { text-align: left; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--line); padding: 2px 4px; }
+table.history td { padding: 2px 4px; border-bottom: 1px solid var(--panel-2); font-variant-numeric: tabular-nums; }
+.history-box { max-height: 170px; overflow-y: auto; }
+a { color: var(--accent); }
+
+/* Help */
+dialog {
+  max-width: 720px; width: calc(100vw - 32px); max-height: calc(100vh - 48px); overflow-y: auto;
+  background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 20px 24px;
+}
+dialog::backdrop { background: rgba(0,0,0,.6); }
+dialog h2 { margin: 0 0 8px; font-size: 20px; }
+dialog h3 { margin: 18px 0 6px; font-size: 14px; color: var(--accent); }
+dialog p, dialog li { color: #c8ccd2; }
+dialog ul { padding-left: 20px; margin: 6px 0; }
+dialog code { white-space: nowrap; background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+@media (max-width: 600px) { dialog code { white-space: normal; } }
+dialog .close-row { display: flex; justify-content: flex-end; margin-top: 16px; }
+.steps-diagram { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; margin: 10px 0; }
+.steps-diagram span { padding: 4px 8px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line); }
+.steps-diagram .loop { border-color: var(--accent); }
+.steps-diagram i { color: var(--muted); font-style: normal; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Wombat<span>recurrent reasoning chess</span></h1>
+  <nav class="tabs">
+    <button data-mode="play" class="active">Play</button>
+    <button data-mode="puzzle">Puzzles</button>
+    <button data-mode="watch">Watch</button>
+  </nav>
+  <div class="header-right">
+    <span id="server-note"></span>
+    <button id="help-open">How it works</button>
+  </div>
+</header>
+<main>
+  <div class="board-column">
+    <div class="board-row">
+      <div class="bar-column">
+        <div class="evalbar" id="model-bar" title="Wombat's evaluation of this position"><div class="fill"></div><div class="label"></div></div>
+        <div class="bar-caption">Wombat</div>
+      </div>
+      <div class="bar-column hidden" id="sf-column">
+        <div class="evalbar" id="sf-bar" title="Stockfish's evaluation of this position"><div class="fill"></div><div class="label"></div></div>
+        <div class="bar-caption">SF</div>
+      </div>
+      <div id="board-wrap">
+        <div id="board"></div>
+        <svg id="arrows" viewBox="0 0 800 800">
+          <defs>
+            <marker id="head-green" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 Z" fill="#15781B"/></marker>
+            <marker id="head-blue" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 Z" fill="#1f5fd1"/></marker>
+            <marker id="head-red" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 Z" fill="#b02525"/></marker>
+            <marker id="head-amber" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto"><path d="M0,0 L4,2 L0,4 Z" fill="#d08a1c"/></marker>
+          </defs>
+          <g id="arrow-layer"></g>
+        </svg>
+        <div id="promotion" class="hidden"><div class="choices"></div></div>
+        <div id="banner" class="hidden"></div>
+      </div>
+    </div>
+    <div id="status">Loading...</div>
+    <div id="error"></div>
+    <section class="card">
+      <h2>Moves <span id="moves-meta"></span></h2>
+      <div id="moves"></div>
+      <div id="summary"></div>
+      <div class="legend" id="legend">
+        <span><span class="who who-model"></span>Wombat</span>
+        <span id="legend-human"><span class="who who-human"></span>You</span>
+        <span id="legend-stockfish"><span class="who who-stockfish"></span>Stockfish</span>
+        <span id="legend-puzzle"><span class="who who-reply"></span>puzzle line</span>
+        <span id="legend-wrong"><s class="mark-bad">Nf3</s> Wombat's wrong pick</span>
+        <span class="needs-stockfish"><span class="label-inaccuracy">?!</span> inaccuracy</span>
+        <span class="needs-stockfish"><span class="label-mistake">?</span> mistake</span>
+        <span class="needs-stockfish"><span class="label-blunder">??</span> blunder</span>
+      </div>
+    </section>
+    <section class="card hidden" data-panel="puzzle">
+      <h2>Puzzle results <span>newest first; retries are not in the tally</span></h2>
+      <div class="history-box"><table class="history"><thead><tr><th>Puzzle</th><th>Rating</th><th>T</th><th>Wombat moves right</th><th>Result</th></tr></thead><tbody id="puzzle-history"><tr><td colspan="5" class="empty">No puzzles yet.</td></tr></tbody></table></div>
+    </section>
+    <section class="card hidden" data-panel="play watch" id="match-card">
+      <h2>Match results <span>Wombat's score by opponent (finished games)</span></h2>
+      <table class="history"><thead><tr><th>Opponent</th><th>Won</th><th>Drawn</th><th>Lost</th><th>Score</th></tr></thead><tbody id="match-scores"><tr><td colspan="5" class="empty">No finished games against Stockfish yet.</td></tr></tbody></table>
+      <h3>Games, newest first</h3>
+      <div class="history-box"><table class="history"><thead><tr><th>#</th><th>Wombat plays</th><th>Opponent</th><th>T</th><th>Result</th><th>Plies</th></tr></thead><tbody id="match-history"><tr><td colspan="6" class="empty">No games yet.</td></tr></tbody></table></div>
+    </section>
+  </div>
+
+  <div class="side">
+    <section class="card">
+      <h2>Model</h2>
+      <div class="field">
+        <select id="checkpoint" title="Checkpoints found under runs/, grouped by run, newest first"></select>
+        <div class="hint" id="checkpoint-info">Loading checkpoints...</div>
+      </div>
+      <div class="field">
+        <div class="top"><label for="steps">Reasoning steps T</label><span class="value" id="steps-value"></span></div>
+        <input type="range" id="steps" min="0" max="32" value="8">
+        <div class="hint">Times the shared reasoning block runs before each move.</div>
+      </div>
+      <div class="field">
+        <div class="top"><label for="pause">Pause between moves</label><span class="value" id="pause-value"></span></div>
+        <input type="range" id="pause" min="0.2" max="5" step="0.1" value="1">
+      </div>
+      <div class="field-row">
+        <label class="check"><input type="checkbox" id="stockfish"> Stockfish evaluation</label>
+        <span class="hint" id="stockfish-note"></span>
+      </div>
+    </section>
+
+    <section class="card" data-panel="play">
+      <h2>Play against Wombat</h2>
+      <p class="intro" id="play-intro"></p>
+      <div class="field-row">
+        <label for="play-opponent">Wombat plays against</label>
+        <select id="play-opponent">
+          <option value="you">You (click to move)</option>
+          <option value="1320">Stockfish, Elo 1320</option>
+          <option value="1500">Stockfish, Elo 1500</option>
+          <option value="1800">Stockfish, Elo 1800</option>
+          <option value="2100">Stockfish, Elo 2100</option>
+          <option value="2500">Stockfish, Elo 2500</option>
+          <option value="full">Stockfish, full strength</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label for="play-color" id="play-color-label">You play</label>
+        <select id="play-color"><option value="white">White</option><option value="black">Black</option><option value="random">Random</option></select>
+        <label for="play-start">from</label>
+        <select id="play-start"><option value="standard">Start position</option><option value="random">Random game position</option></select>
+      </div>
+      <div class="field-row needs-engine-opponent">
+        <label class="check"><input type="checkbox" id="play-auto" checked> Next game automatically</label>
+      </div>
+      <div class="field-row">
+        <button class="primary" id="play-new">New game</button>
+        <button id="play-undo">Undo</button>
+        <button id="play-flip">Flip board</button>
+        <button id="play-stop" class="needs-engine-opponent">Stop</button>
+      </div>
+      <div id="play-info" class="hint"></div>
+    </section>
+
+    <section class="card hidden" data-panel="puzzle">
+      <h2>Puzzles <span id="puzzle-link"></span></h2>
+      <p class="intro">Wombat solves held-out Lichess puzzles move by move. A puzzle counts as solved only if every Wombat move is right; any checkmating move also counts.</p>
+      <div class="field-row">
+        <span class="tally" id="tally">0 / 0</span>
+        <span class="hint" id="tally-note">solved / attempted</span>
+        <button class="link" id="tally-reset">reset</button>
+      </div>
+      <div class="field-row">
+        <label>Rating</label>
+        <input type="number" id="min-rating" placeholder="min" step="100">
+        <input type="number" id="max-rating" placeholder="max" step="100">
+        <label class="check"><input type="checkbox" id="puzzle-auto" checked> Auto-continue</label>
+      </div>
+      <div class="field-row">
+        <button class="primary" id="puzzle-next">Next puzzle</button>
+        <button id="puzzle-retry" title="Run the same puzzle again, for example at a different T">Retry at current T</button>
+        <button id="puzzle-stop">Stop</button>
+      </div>
+      <div id="puzzle-info" class="hint"></div>
+      <div class="puzzle-marks" id="puzzle-marks"></div>
+    </section>
+
+    <section class="card hidden" data-panel="watch">
+      <h2>Watch Wombat play</h2>
+      <p class="intro">Wombat plays both sides from a random game position, one move per pause. Tick Stockfish to have Wombat play a node-limited Stockfish instead; for a set Elo, use Play.</p>
+      <div class="field-row">
+        <label for="watch-start">From</label>
+        <select id="watch-start"><option value="random">Random game position</option><option value="standard">Start position</option></select>
+        <label for="watch-plies">for</label>
+        <input type="number" id="watch-plies" value="20" min="1" max="400"><span class="hint">plies</span>
+      </div>
+      <div class="field-row">
+        <label class="check"><input type="checkbox" id="watch-sf"> Against Stockfish at</label>
+        <input type="number" id="watch-nodes" value="1000" min="1" step="500"><span class="hint">nodes</span>
+      </div>
+      <div class="field-row">
+        <label class="check"><input type="checkbox" id="watch-auto" checked> Auto-continue</label>
+      </div>
+      <div class="field-row">
+        <button class="primary" id="watch-start-btn">New game</button>
+        <button id="watch-stop">Stop</button>
+      </div>
+      <div id="watch-info" class="hint"></div>
+    </section>
+
+    <section class="card">
+      <h2>Wombat's view <span id="an-meta"></span></h2>
+      <div id="analysis"><div class="empty">Wombat's reasoning appears here after it moves.</div></div>
+    </section>
+
+    <section class="card">
+      <h2>Explain a move <span id="ex-meta"></span></h2>
+      <div class="field-row">
+        <button id="explain-last" disabled>Explain last move</button>
+        <button id="explain-close" class="hidden">Back to the game</button>
+      </div>
+      <div id="explain"><div class="empty">Click a move in the move list to see why Wombat would play it.</div></div>
+    </section>
+  </div>
+</main>
+
+<dialog id="help">
+  <h2>How the Wombat visualizer works</h2>
+  <p>Wombat is a small recurrent transformer. It reads the board once, then runs one shared reasoning block
+  over a scratchpad again and again before it reads out a move and a value. The number of repetitions,
+  <b>T</b>, is chosen when you run it, so one checkpoint can answer at once (T = 0) or think longer (up to T = 32).
+  Everything runs on this computer's CPU.</p>
+  <div class="steps-diagram">
+    <span>board</span><i>&rarr;</i><span>encoder</span><i>&rarr;</i>
+    <span class="loop">reasoning block &times; T</span><i>&rarr;</i><span>move probabilities + value</span>
+  </div>
+
+  <h3>The three modes</h3>
+  <ul>
+    <li><b>Play</b>: pick your colour and press New game. Click a piece, then a highlighted square
+      (a picker appears for promotions). Undo takes back your last move and Wombat's reply.
+      Choose a Stockfish level under <b>Wombat plays against</b> to watch Wombat play Stockfish instead:
+      Stockfish uses <code>UCI_LimitStrength</code> with that <code>UCI_Elo</code> (1320 is its minimum),
+      100 ms per move and one thread. Those games play to the end and the <b>Match results</b> card keeps
+      Wombat's wins, draws and losses per level.</li>
+    <li><b>Puzzles</b>: a random puzzle from the held-out test split. Wombat plays the solver's side after
+      each pause. A green check means its move matched the solution (or mated), a red cross means it did not.
+      The green arrow then shows the right move, which is played so the line can continue with the
+      opponent's reply. Retry runs the same puzzle again, which is the quickest way to compare two values of T.</li>
+    <li><b>Watch</b>: Wombat plays both sides for the chosen number of plies, or plays Stockfish at a low
+      node count. With auto-continue a new position starts when a game ends.</li>
+  </ul>
+
+  <h3>Reading Wombat's view</h3>
+  <ul>
+    <li>The <b>blue arrow</b> is the move Wombat is about to play.</li>
+    <li><b>Candidates</b>: the five most likely moves, with Wombat's probability for each among the legal moves.
+      The top one is the move it plays.</li>
+    <li><b>Evaluation</b>: Wombat's value head predicts the win chance W of the side to move. It is shown
+      in pawns from White's side, like Stockfish, by inverting the Lichess curve:
+      <code>pawns = ln(W / (1 - W)) / 0.368208</code> with W clamped to 0.001..0.999. The <b>Wombat bar</b>
+      left of the board shows it for the current position at the current T, and each candidate's
+      <b>eval</b> column is Wombat's per-move value after that move.</li>
+    <li><b>Value head untrained</b>: puzzle-trained checkpoints (all <code>runs/v6-*</code>) only learned
+      to pick moves, so their evaluations would be noise. The page shows "value head untrained" and a
+      striped bar instead of a number; their moves are still meaningful.</li>
+    <li><b>Snapshots</b>: game-training runs save <code>snapshot-step-*.pt</code> files every few thousand
+      steps. They appear under their run in the checkpoint list, so earlier iterations can be played.</li>
+    <li><b>Top move after T steps</b>: the same forward pass read out after 1, 2, 4, 8 and 16 steps.
+      If the move changes along the strip, thinking longer changed Wombat's mind. In puzzle mode the chips
+      are green when that depth would have found the solution and red when it would not.</li>
+    <li>Moving the <b>T slider</b> or switching <b>checkpoint</b> re-reads the last analysed position at once,
+      so you can compare depths or checkpoints on the same position without replaying anything.</li>
+  </ul>
+
+  <h3>Explaining a move</h3>
+  <ul>
+    <li>Click any move in the move list, or press <b>Explain last move</b>, to ask the chosen checkpoint why it
+      would play that move at the current T. The board shows the position before the move until you press
+      <b>Back to the game</b>; a running game carries on meanwhile. Changing T or the checkpoint re-explains.</li>
+    <li><b>By reasoning depth</b>: Wombat's top move after 0 to 16 steps, and its probability for the explained move.</li>
+    <li><b>Values</b> are Wombat's evaluation of the position and its per-move values, from White's side.
+      The <b>amber arrow</b> is the likeliest legal opponent reply to its top move, scored by its lookahead heads, on checkpoints that have them.</li>
+    <li><b>Attention</b>: blue shading shows how much the moving piece's square token attended to each square
+      in the last block of the last step.</li>
+    <li><b>Remove one piece</b>: every other piece except the kings is taken off in turn (skipping removals that
+      make the position invalid or the move illegal) and Wombat is asked again at the same T. The badges show
+      how many points the explained move's probability changes; the list says what it would then play.</li>
+  </ul>
+
+  <h3>Stockfish evaluation (optional)</h3>
+  <ul>
+    <li>Off by default. When on, Stockfish runs on one CPU thread at about 20k nodes per position.</li>
+    <li>The <b>SF bar</b>, next to Wombat's, is White's win chance from Stockfish's centipawn score, using the Lichess formula
+      <code>win% = 50 + 50 * (2 / (1 + exp(-0.00368208 * cp)) - 1)</code>. The number on the bar is the score in pawns, or M<i>n</i> for mate.</li>
+    <li>Each move is labelled by the win chance it gives up compared with Stockfish's best move:
+      <span class="label-inaccuracy">?! inaccuracy</span> from 5 points, <span class="label-mistake">? mistake</span> from 10,
+      <span class="label-blunder">?? blunder</span> from 15. Hover a move to see the exact loss and the best move.</li>
+    <li><b>Accuracy</b> per move is the Lichess formula <code>103.1668 * exp(-0.04354 * loss) - 3.1669</code>, clamped to 0..100,
+      and is averaged under the move list for each player.</li>
+  </ul>
+  <div class="close-row"><button class="primary" id="help-close">Got it</button></div>
+</dialog>
+
+<script>
+"use strict";
+const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const FILES = "abcdefgh";
+const GLYPH = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟︎" };
+const SUFFIX = { good: "", inaccuracy: "?!", mistake: "?", blunder: "??" };
+const ARROW = { green: "#15781B", blue: "#1f5fd1", red: "#b02525", amber: "#d08a1c" };
+const MODEL_DELAY_MS = 450;
+const DOT = " · ";
+const $ = (id) => document.getElementById(id);
+
+const S = {
+  mode: "play",
+  status: null,
+  checkpoints: [],
+  token: 0,
+  busy: false,
+  game: null,
+  selected: null,
+  arrows: [],
+  analysis: null,
+  explain: null,
+  orientation: "white",
+  human: "white",
+  puzzle: { solved: 0, attempted: 0, data: null, marks: [], history: [] },
+  matches: { games: [], scores: new Map() },
+};
+// Games against a Stockfish level play to the end, up to this many plies.
+const MAX_MATCH_PLIES = 400;
+
+class Cancelled extends Error {}
+function alive(t) { if (t !== S.token) throw new Cancelled(); }
+function sleep(ms, t) { return new Promise((resolve) => setTimeout(resolve, ms)).then(() => alive(t)); }
+function pauseMs() { return Math.round(parseFloat($("pause").value) * 1000); }
+function steps() { return parseInt($("steps").value, 10); }
+function stockfishOn() { return $("stockfish").checked && S.status && S.status.stockfish; }
+function escapeHtml(text) { return String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+
+async function api(path, body) {
+  const options = body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  };
+  const response = await fetch(path, options);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || response.statusText);
+  return data;
+}
+async function call(t, path, body) { const data = await api(path, body); alive(t); return data; }
+
+function showError(error) { $("error").textContent = error ? String(error.message || error) : ""; }
+function setStatus(html) { $("status").innerHTML = html; }
+function banner(text, kind, detail) {
+  const node = $("banner");
+  node.innerHTML = text ? `${escapeHtml(text)}${detail ? `<small>${escapeHtml(detail)}</small>` : ""}` : "";
+  node.className = text ? kind || "" : "hidden";
+}
+
+// Starts a cancellable flow; any running flow stops at its next await.
+function launch(flow) {
+  S.token += 1;
+  S.busy = false;
+  S.selected = null;
+  $("promotion").classList.add("hidden");
+  banner("");
+  const t = S.token;
+  flow(t).catch((error) => {
+    if (!(error instanceof Cancelled)) { showError(error); S.busy = false; renderBoard(); }
+  });
+}
+
+/* ---------- Settings ---------- */
+const SAVED_VALUES = ["checkpoint", "steps", "pause", "play-color", "play-start", "min-rating", "max-rating",
+  "watch-start", "watch-plies", "watch-nodes", "play-opponent"];
+const SAVED_CHECKS = ["stockfish", "puzzle-auto", "watch-auto", "watch-sf", "play-auto"];
+function saveSettings() {
+  try {
+    const keep = { helpSeen: true };
+    for (const id of SAVED_VALUES) keep[id] = $(id).value;
+    for (const id of SAVED_CHECKS) keep[id] = $(id).checked;
+    localStorage.setItem("wombat-visualizer", JSON.stringify(keep));
+  } catch (error) { /* storage is a convenience only */ }
+}
+function loadSettings() {
+  try {
+    const keep = JSON.parse(localStorage.getItem("wombat-visualizer") || "{}");
+    for (const [id, value] of Object.entries(keep)) {
+      const node = $(id);
+      if (!node || id === "checkpoint") continue;
+      if (typeof value === "boolean") node.checked = value; else node.value = value;
+    }
+    return keep;
+  } catch (error) { return {}; }
+}
+function checkpointInfo() { return S.checkpoints.find((item) => item.id === $("checkpoint").value); }
+function shortCheckpoint() {
+  const info = checkpointInfo();
+  return info ? `${info.run}${info.step !== null ? ` @ ${info.step}` : ""}` : "no checkpoint";
+}
+function updateSettingLabels() {
+  const t = steps();
+  $("steps-value").textContent = t === 0 ? "T = 0 (no reasoning steps)" : `T = ${t}`;
+  $("pause-value").textContent = `${parseFloat($("pause").value).toFixed(1)} s`;
+  const info = checkpointInfo();
+  let html = S.loaded ? "No checkpoint found under runs/." : "Loading checkpoints...";
+  if (info) {
+    html = escapeHtml([info.id, info.step !== null ? `step ${info.step}` : "no step recorded", `${info.readout} readout`,
+      `${(info.parameters / 1e6).toFixed(2)}M params`].join(DOT));
+    if (!info.value_trained) html += `${DOT}<span class="untrained-note">value head untrained, no evaluation</span>`;
+    else if (!info.move_values_trained) html += `${DOT}<span class="untrained-note">per-move values untrained</span>`;
+  }
+  $("checkpoint-info").innerHTML = html;
+}
+
+function checkpointLabel(info) {
+  const name = info.kind === "snapshot" ? `snapshot @ step ${info.step}`
+    : `${info.name}${info.step !== null ? ` @ step ${info.step}` : ""}`;
+  return `${info.run} / ${name} (${info.readout}${info.value_trained ? "" : ", no eval"})`;
+}
+
+/* ---------- Board ---------- */
+function squareName(file, rank) { return FILES[file] + (rank + 1); }
+function parseFen(fen) {
+  const pieces = {};
+  fen.split(" ")[0].split("/").forEach((row, index) => {
+    const rank = 7 - index;
+    let file = 0;
+    for (const ch of row) {
+      if (/\d/.test(ch)) file += parseInt(ch, 10);
+      else { pieces[squareName(file, rank)] = ch; file += 1; }
+    }
+  });
+  return pieces;
+}
+function squareCenter(name) {
+  let file = FILES.indexOf(name[0]);
+  let rank = parseInt(name[1], 10) - 1;
+  if (S.orientation === "black") { file = 7 - file; rank = 7 - rank; }
+  return [file * 100 + 50, (7 - rank) * 100 + 50];
+}
+
+function buildBoard() {
+  const board = $("board");
+  board.innerHTML = "";
+  for (let index = 0; index < 64; index += 1) {
+    const node = document.createElement("div");
+    node.addEventListener("click", () => onSquare(node.dataset.square));
+    board.appendChild(node);
+  }
+}
+
+function renderBoard() {
+  if (!S.game) return;
+  const state = S.game.state;
+  // While a move is explained the board shows the position before it, with its overlays.
+  const view = S.explain;
+  const pieces = parseFen(view ? view.fen : state.fen);
+  const last = view ? view.uci : S.game.moves.length ? S.game.moves[S.game.moves.length - 1] : null;
+  const targets = new Set(S.selected && !view
+    ? state.legal.filter((uci) => uci.startsWith(S.selected)).map((uci) => uci.slice(2, 4)) : []);
+  const { heat, impact } = explainOverlays();
+  const nodes = $("board").children;
+  for (let row = 0; row < 8; row += 1) {
+    for (let col = 0; col < 8; col += 1) {
+      const file = S.orientation === "white" ? col : 7 - col;
+      const rank = S.orientation === "white" ? 7 - row : row;
+      const name = squareName(file, rank);
+      const node = nodes[row * 8 + col];
+      node.dataset.square = name;
+      const classes = ["sq", (file + rank) % 2 ? "light" : "dark"];
+      if (last && (last.slice(0, 2) === name || last.slice(2, 4) === name)) classes.push("last");
+      if (S.selected === name) classes.push("sel");
+      if (!view && state.check === name) classes.push("check");
+      if (targets.has(name)) classes.push("target");
+      if (pieces[name]) classes.push("occupied");
+      node.className = classes.join(" ");
+      node.innerHTML = "";
+      if (heat.has(name)) node.insertAdjacentHTML("beforeend", `<div class="heat" style="opacity:${heat.get(name)}"></div>`);
+      if (impact.has(name)) {
+        const change = impact.get(name);
+        node.insertAdjacentHTML("beforeend", `<span class="impact${change > 0 ? " up" : ""}">${signedPoints(change)}</span>`);
+      }
+      if (col === 0) node.insertAdjacentHTML("beforeend", `<span class="coord rank">${rank + 1}</span>`);
+      if (row === 7) node.insertAdjacentHTML("beforeend", `<span class="coord file">${FILES[file]}</span>`);
+      const piece = pieces[name];
+      if (piece) {
+        const span = document.createElement("span");
+        span.className = `piece ${piece === piece.toUpperCase() ? "w" : "b"}`;
+        span.textContent = GLYPH[piece.toLowerCase()];
+        node.appendChild(span);
+      }
+    }
+  }
+  renderArrows();
+  renderMoves();
+  for (const bar of document.querySelectorAll(".evalbar")) bar.classList.toggle("flipped", S.orientation === "black");
+}
+
+function renderArrows() {
+  const layer = $("arrow-layer");
+  layer.innerHTML = "";
+  for (const arrow of S.explain ? explainArrows() : S.arrows) {
+    const [x1, y1] = squareCenter(arrow.uci.slice(0, 2));
+    const [x2, y2] = squareCenter(arrow.uci.slice(2, 4));
+    const shorten = 30 / Math.hypot(x2 - x1, y2 - y1);
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    const attributes = {
+      x1, y1, x2: x2 - (x2 - x1) * shorten, y2: y2 - (y2 - y1) * shorten, stroke: ARROW[arrow.color],
+      "stroke-width": 16, "stroke-linecap": "round", opacity: 0.85, "marker-end": `url(#head-${arrow.color})`,
+    };
+    for (const [key, value] of Object.entries(attributes)) line.setAttribute(key, value);
+    if (arrow.dashed) line.setAttribute("stroke-dasharray", "20 14");
+    layer.appendChild(line);
+  }
+}
+function showArrows(arrows) { S.arrows = arrows; renderArrows(); }
+
+function humanCanMove() {
+  return S.mode === "play" && S.game && !S.busy && !S.explain && !S.game.state.outcome && S.game.state.turn === S.human;
+}
+
+function onSquare(name) {
+  if (!humanCanMove()) return;
+  const state = S.game.state;
+  if (S.selected) {
+    const moves = state.legal.filter((uci) => uci.startsWith(S.selected) && uci.slice(2, 4) === name);
+    if (moves.length === 1) { humanMove(moves[0]); return; }
+    if (moves.length > 1) { choosePromotion(moves); return; }
+  }
+  const own = state.legal.some((uci) => uci.startsWith(name));
+  S.selected = own && S.selected !== name ? name : null;
+  renderBoard();
+}
+
+function choosePromotion(moves) {
+  const overlay = $("promotion");
+  const box = overlay.querySelector(".choices");
+  box.innerHTML = "";
+  const white = S.game.state.turn === "white";
+  for (const piece of ["q", "r", "b", "n"]) {
+    const uci = moves.find((item) => item.endsWith(piece));
+    if (!uci) continue;
+    const button = document.createElement("button");
+    button.dataset.piece = piece;
+    button.innerHTML = `<span class="piece ${white ? "w" : "b"}">${GLYPH[piece]}</span>`;
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      overlay.classList.add("hidden");
+      humanMove(uci);
+    });
+    box.appendChild(button);
+  }
+  overlay.onclick = () => { overlay.classList.add("hidden"); S.selected = null; renderBoard(); };
+  overlay.classList.remove("hidden");
+}
+
+/* ---------- Game state ---------- */
+async function setGame(t, start) {
+  const state = await call(t, "/api/state", { fen: start, moves: [] });
+  S.game = { start: state.fen, moves: [], notes: [], fens: [state.fen], state };
+  S.selected = null;
+  S.arrows = [];
+  S.explain = null;
+  renderExplain();
+  renderBoard();
+  refreshEval();
+}
+
+async function push(t, uci, note) {
+  const game = S.game;
+  const state = await call(t, "/api/state", { fen: game.start, moves: [...game.moves, uci] });
+  game.moves.push(uci);
+  game.notes.push(note || {});
+  game.fens.push(state.fen);
+  game.state = state;
+  S.selected = null;
+  S.arrows = [];
+  renderBoard();
+  refreshModelEval();
+  if (stockfishOn()) judge(game, game.moves.length - 1);
+}
+
+async function pop(t, count) {
+  const game = S.game;
+  const moves = game.moves.slice(0, Math.max(0, game.moves.length - count));
+  const state = await call(t, "/api/state", { fen: game.start, moves });
+  game.moves = moves;
+  game.notes.length = moves.length;
+  game.fens.length = moves.length + 1;
+  game.state = state;
+  S.selected = null;
+  if (S.explain && S.explain.ply >= moves.length) { S.explain = null; renderExplain(); }
+  renderBoard();
+  refreshEval();
+}
+
+function outcomeText(outcome) {
+  const reason = outcome.termination.replace(/_/g, " ");
+  const winner = outcome.result === "1-0" ? "White wins" : outcome.result === "0-1" ? "Black wins" : "Draw";
+  return `${winner} by ${reason} (${outcome.result})`;
+}
+
+/* ---------- Model ---------- */
+async function analyse(t, solution) {
+  const state = S.game.state;
+  // The game's moves let the server's draw guard see repetitions.
+  const body = { checkpoint: $("checkpoint").value, fen: state.fen, steps: steps(), start: S.game.start, moves: S.game.moves };
+  if (solution) body.solution = solution;
+  const analysis = await call(t, "/api/analyse", body);
+  Object.assign(analysis, {
+    turn: state.turn, fen: state.fen, solution, checkpoint: shortCheckpoint(),
+    played: { steps: analysis.steps, san: analysis.san, checkpoint: shortCheckpoint() },
+  });
+  S.analysis = analysis;
+  renderAnalysis();
+  showModelEval(analysis);
+  return analysis;
+}
+
+// Re-reads the last analysed position with the current T and checkpoint, without playing a move.
+async function reanalyse() {
+  const previous = S.analysis;
+  if (!previous) return;
+  const body = { checkpoint: $("checkpoint").value, fen: previous.fen, steps: steps() };
+  if (previous.solution) body.solution = previous.solution;
+  try {
+    const fresh = await api("/api/analyse", body);
+    if (S.analysis !== previous) return;
+    Object.assign(fresh, {
+      turn: previous.turn, fen: previous.fen, solution: previous.solution, checkpoint: shortCheckpoint(), played: previous.played,
+    });
+    S.analysis = fresh;
+    renderAnalysis();
+  } catch (error) { showError(error); }
+}
+
+// Thinks, shows the chosen move as a blue arrow for `preview` ms, then plays it.
+async function modelMove(t, preview, solution) {
+  const analysis = await analyse(t, solution);
+  showArrows([{ uci: analysis.move, color: "blue" }]);
+  await sleep(preview, t);
+  return analysis;
+}
+
+function stripStory(strip) {
+  const runs = [];
+  for (const chip of strip) {
+    const last = runs[runs.length - 1];
+    if (last && last.san === chip.san) last.depths.push(chip.steps);
+    else runs.push({ san: chip.san, depths: [chip.steps] });
+  }
+  if (runs.length === 1) return `Same top move, <b>${escapeHtml(runs[0].san)}</b>, at every depth shown.`;
+  const parts = runs.map((run) => `<b>${escapeHtml(run.san)}</b> at T = ${run.depths.join(", ")}`);
+  return `Thinking longer changes the top move: ${parts.join("; then ")}.`;
+}
+
+function renderAnalysis() {
+  const box = $("analysis");
+  const analysis = S.analysis;
+  if (!analysis) {
+    box.innerHTML = '<div class="empty">Wombat\'s reasoning appears here after it moves.</div>';
+    $("an-meta").textContent = "";
+    return;
+  }
+  $("an-meta").textContent = analysis.checkpoint;
+  const side = analysis.turn === "white" ? "White" : "Black";
+  const evaluated = analysis.value_trained;
+  const perMove = analysis.move_values_trained;
+  const chosen = analysis.candidates[0];
+  const verdict = evaluated ? `, eval <b>${formatPawns(analysis.pawns_white)}</b>` : "";
+  const pick = `<b>${escapeHtml(chosen.san)}</b> (${(chosen.probability * 100).toFixed(0)}%)${verdict}`;
+  const played = analysis.played;
+  const replayed = played.steps !== analysis.steps || played.checkpoint !== analysis.checkpoint;
+  let html = replayed
+    ? `<div class="headline">${side} to move. Re-read at <b>T = ${analysis.steps}</b>, Wombat would pick ${pick}.</div>`
+      + `<div class="hint">In the game it played ${escapeHtml(played.san)} at T = ${played.steps} (${escapeHtml(played.checkpoint)}).</div>`
+    : `<div class="headline">${side} to move. After <b>T = ${analysis.steps}</b> steps Wombat picks ${pick}.</div>`;
+  html += evaluated
+    ? `<div class="hint">Eval in pawns from White's side${DOT}White win chance ${analysis.win_white.toFixed(0)}%</div>`
+    : '<div class="hint"><span class="untrained-note">Value head untrained:</span> this checkpoint only learned to pick moves, so it has no evaluation.</div>';
+  html += `<h3>Top candidates at T = ${analysis.steps}</h3>`;
+  html += `<div class="cand head"><span>move</span><span>probability</span><span></span><span class="ev">${perMove ? "eval" : ""}</span><span></span></div>`;
+  for (const [index, cand] of analysis.candidates.entries()) {
+    const pct = (cand.probability * 100).toFixed(1);
+    const mark = cand.solves ? '<span class="mark-ok">✓</span>' : "<span></span>";
+    const value = perMove
+      ? `<span class="ev" title="Wombat's evaluation after ${escapeHtml(cand.san)}, from White's side">${formatPawns(cand.pawns_white)}</span>`
+      : '<span class="ev hint" title="Per-move value head untrained">?</span>';
+    html += `<div class="cand${index === 0 ? " chosen" : ""}"><span class="san">${escapeHtml(cand.san)}</span>`
+      + `<div class="bar"><div style="width:${pct}%"></div></div><span class="pct">${pct}%</span>${value}${mark}</div>`;
+  }
+  html += "<h3>Top move after T reasoning steps (same position)</h3><div class=\"strip\">";
+  for (const chip of analysis.strip) {
+    let cls = "chip";
+    if (chip.uci === analysis.move) cls += " same";
+    if (chip.solves !== undefined) cls += chip.solves ? " solves" : " fails";
+    const title = evaluated ? `evaluation at T = ${chip.steps}: ${formatPawns(chip.pawns_white)}` : `T = ${chip.steps}`;
+    html += `<div class="${cls}" title="${title}">`
+      + `<div class="t">T=${chip.steps}</div><div class="m">${escapeHtml(chip.san)}</div>`
+      + `<div class="p">${(chip.probability * 100).toFixed(0)}%${evaluated ? `${DOT}${formatPawns(chip.pawns_white)}` : ""}</div></div>`;
+  }
+  html += `</div><div class="verdict">${stripStory(analysis.strip)}`;
+  if (analysis.solution) {
+    const solving = analysis.strip.filter((chip) => chip.solves).map((chip) => chip.steps);
+    html += solving.length ? ` Solves this move at T = ${solving.join(", ")}.` : " None of these depths finds the solution.";
+  }
+  html += "</div>";
+  box.innerHTML = html;
+}
+
+/* ---------- Explain a move ---------- */
+const EXPLAIN_BADGES = 6;
+const EXPLAIN_ROWS = 8;
+function percent(probability) { return `${(probability * 100).toFixed(0)}%`; }
+function signedPoints(change) {
+  const points = Math.abs(change * 100);
+  return `${change < 0 ? "−" : "+"}${points < 10 ? points.toFixed(1) : points.toFixed(0)}`;
+}
+function glyph(symbol) {
+  return `<span class="piece mini ${symbol === symbol.toUpperCase() ? "w" : "b"}">${GLYPH[symbol.toLowerCase()]}</span>`;
+}
+
+function moveLabel(game, ply) {
+  const parts = game.start.split(" ");
+  const index = ply + (parts[1] === "b" ? 1 : 0);
+  const number = parseInt(parts[5] || "1", 10) + Math.floor(index / 2);
+  return `${number}${index % 2 === 0 ? "." : "..."} ${game.state.sans[ply]}`;
+}
+
+function explainPly(ply) {
+  const game = S.game;
+  if (!game || ply < 0 || ply >= game.moves.length) return;
+  const note = game.notes[ply] || {};
+  S.selected = null;
+  S.explain = { ply, fen: game.fens[ply], uci: game.moves[ply], label: moveLabel(game, ply), compare: note.insteadUci || null };
+  fetchExplanation();
+}
+
+// Asks the server for the explanation at the current T and checkpoint; stale answers are dropped.
+function fetchExplanation() {
+  const view = S.explain;
+  if (!view) return;
+  const request = { checkpoint: $("checkpoint").value, fen: view.fen, move: view.uci, steps: steps() };
+  if (view.compare) request.compare = view.compare;
+  Object.assign(view, { request, result: null, error: null });
+  renderExplain();
+  renderBoard();
+  api("/api/explain", request).then((result) => {
+    if (S.explain !== view || view.request !== request) return;
+    view.result = result;
+    renderExplain();
+    renderBoard();
+  }).catch((error) => {
+    if (S.explain !== view || view.request !== request) return;
+    view.error = String(error.message || error);
+    renderExplain();
+  });
+}
+
+function closeExplain() {
+  S.explain = null;
+  renderExplain();
+  renderBoard();
+}
+
+// Attention opacity per square and the occlusion badges, for the explained position.
+function explainOverlays() {
+  const heat = new Map();
+  const impact = new Map();
+  const result = S.explain && S.explain.result;
+  if (!result) return { heat, impact };
+  if (result.attention) {
+    const weights = result.attention.weights;
+    const most = Math.max(...weights);
+    weights.forEach((weight, square) => {
+      if (most > 0 && weight > 0) heat.set(squareName(square % 8, Math.floor(square / 8)), (0.6 * weight / most).toFixed(3));
+    });
+  }
+  for (const row of result.occlusion.pieces.slice(0, EXPLAIN_BADGES)) {
+    if (Math.abs(row.change) >= 0.005) impact.set(row.square, row.change);
+  }
+  return { heat, impact };
+}
+
+function explainArrows() {
+  const view = S.explain;
+  const arrows = [{ uci: view.uci, color: "blue" }];
+  if (view.compare) arrows.push({ uci: view.compare, color: "red" });
+  const reply = view.result && view.result.reply;
+  if (reply && reply.legal.length) {
+    arrows.push({ uci: reply.legal[0].uci.slice(0, 4), color: "amber", dashed: true });
+  }
+  return arrows;
+}
+
+function renderExplain() {
+  const box = $("explain");
+  const view = S.explain;
+  $("explain-close").classList.toggle("hidden", !view);
+  if (!view) {
+    $("ex-meta").textContent = "";
+    box.innerHTML = '<div class="empty">Click a move in the move list to see why Wombat would play it.</div>';
+    renderMoves();
+    return;
+  }
+  $("ex-meta").textContent = shortCheckpoint();
+  if (view.error) { box.innerHTML = `<div class="mark-bad">${escapeHtml(view.error)}</div>`; return; }
+  const result = view.result;
+  if (!result) {
+    box.innerHTML = `<div class="empty">Explaining ${escapeHtml(view.label)} at T = ${view.request.steps}...</div>`;
+    renderMoves();
+    return;
+  }
+  const san = escapeHtml(result.move.san);
+  let html = `<div class="headline">${escapeHtml(view.label)}: Wombat gives <b>${san}</b> ${percent(result.move.probability)} at T = ${result.steps}.</div>`;
+  if (result.best.uci !== result.move.uci) {
+    html += `<div class="hint">Its own pick there is <b>${escapeHtml(result.best.san)}</b> (${percent(result.best.probability)}).</div>`;
+  }
+  html += `<div class="hint">The board shows the position before the move.</div>`;
+
+  html += `<h3>By reasoning depth: top move, then P(${san})</h3><div class="strip six">`;
+  for (const depth of result.depths) {
+    const top = depth.top[0];
+    const title = depth.top.map((item) => `${item.san} ${percent(item.probability)}`).join(", ");
+    html += `<div class="chip${top.uci === result.move.uci ? " same" : ""}" title="T = ${depth.steps}: ${escapeHtml(title)}">`
+      + `<div class="t">T=${depth.steps}</div><div class="m">${escapeHtml(top.san)}</div>`
+      + `<div class="q">${percent(depth.move_probability)}</div></div>`;
+  }
+  html += "</div>";
+
+  html += "<h3>Values, from White's side</h3>";
+  if (result.value_trained) {
+    html += `<div>Position <b>${formatPawns(result.pawns_white)}</b>${DOT}White win chance ${result.win_white.toFixed(0)}%</div>`;
+  } else {
+    html += '<div class="hint"><span class="untrained-note">Value head untrained:</span> no evaluation.</div>';
+  }
+  if (result.move_values_trained) {
+    const roles = { played: "explained", compare: "compared", best: "its pick" };
+    html += '<div class="tokens">' + result.moves.map((item) =>
+      `<span title="${roles[item.role]}">${escapeHtml(item.san)} ${formatPawns(item.pawns_white)}</span>`).join("") + "</div>";
+  } else {
+    html += '<div class="hint">Per-move values untrained.</div>';
+  }
+
+  html += "<h3>Expected reply</h3>";
+  if (result.reply && result.reply.legal.length) {
+    const likely = result.reply.legal[0];
+    html += `<div>After its top move <b>${result.reply.after.san}</b> it expects <b>${likely.san}</b>`
+      + ` (${percent(likely.probability)} of the legal replies), the amber arrow.</div>`;
+  } else if (result.reply) {
+    html += `<div>After its top move <b>${result.reply.after.san}</b> the opponent has no legal reply.</div>`;
+  } else {
+    html += '<div class="hint">This checkpoint has no lookahead heads.</div>';
+  }
+
+  html += "<h3>Attention of the moving piece</h3>";
+  if (result.attention) {
+    html += `<div class="hint">Last block at T = ${result.attention.steps}, shaded blue on the board;`
+      + ` ${percent(result.attention.elsewhere)} went to the state and scratch tokens.</div><div class="tokens">`;
+    html += result.attention.top.map((item) =>
+      `<span>${item.piece ? glyph(item.piece) : ""}${item.square} ${percent(item.weight)}</span>`).join("");
+    html += "</div>";
+  } else {
+    html += '<div class="hint">At T = 0 the reasoning block never runs, so there is no attention to show.</div>';
+  }
+
+  const occlusion = result.occlusion;
+  html += `<h3>Remove one piece: change in P(${san}), ${percent(occlusion.probability)} with all pieces</h3>`;
+  const rows = occlusion.pieces.slice(0, EXPLAIN_ROWS);
+  const largest = Math.max(0.01, ...rows.map((row) => Math.abs(row.change)));
+  for (const row of rows) {
+    const width = (50 * Math.abs(row.change)) / largest;
+    const bar = row.change < 0
+      ? `<div class="down" style="right:50%;width:${width.toFixed(1)}%"></div>`
+      : `<div class="rise" style="left:50%;width:${width.toFixed(1)}%"></div>`;
+    html += `<div class="occ"><span>${glyph(row.piece)} ${row.square}</span><div class="diverge">${bar}</div>`
+      + `<span class="num">${signedPoints(row.change)}</span>`
+      + `<span class="then" title="Without it Wombat would play ${escapeHtml(row.best.san)}">then ${escapeHtml(row.best.san)}</span></div>`;
+  }
+  if (!rows.length) html += '<div class="hint">No piece can be removed with the move still legal.</div>';
+  const skipped = occlusion.skipped.length;
+  html += `<div class="verdict">In points of probability; badges mark the ${EXPLAIN_BADGES} largest changes.`
+    + ` ${skipped} piece${skipped === 1 ? "" : "s"} skipped: the kings, the moving piece and removals that break the position or the move.</div>`;
+  box.innerHTML = html;
+  renderMoves();
+}
+
+/* ---------- Stockfish ---------- */
+function judge(game, ply) {
+  const note = game.notes[ply];
+  if (!note || note.judge || note.judging) return;
+  note.judging = true;
+  api("/api/judge", { fen: game.fens[ply], move: game.moves[ply] }).then((result) => {
+    note.judge = result;
+    if (S.game !== game || game.notes[ply] !== note) return;
+    renderMoves();
+    if (ply === game.moves.length - 1) setStockfishBar(result.eval_after);
+  }).catch(showError).finally(() => { note.judging = false; });
+}
+
+function refreshEval() {
+  refreshModelEval();
+  const on = stockfishOn();
+  $("sf-column").classList.toggle("hidden", !on);
+  for (const node of document.querySelectorAll(".needs-stockfish")) node.classList.toggle("hidden", !on);
+  if (!on || !S.game) return;
+  const fen = S.game.state.fen;
+  api("/api/eval", { fen }).then((result) => {
+    if (S.game && S.game.state.fen === fen) setStockfishBar(result);
+  }).catch(showError);
+}
+
+function formatPawns(pawns) {
+  const rounded = Math.round(pawns * 10) / 10;
+  if (rounded === 0) return "0.0";
+  return `${rounded > 0 ? "+" : "−"}${Math.abs(rounded).toFixed(1)}`;
+}
+
+// Wombat's own evaluation of the current position, read at the current T and checkpoint.
+function refreshModelEval() {
+  const game = S.game;
+  if (!game || !S.loaded) return;
+  const outcome = game.state.outcome;
+  if (outcome) {
+    const win = outcome.result === "1-0" ? 100 : outcome.result === "0-1" ? 0 : 50;
+    setBar("model-bar", win, outcome.result === "1/2-1/2" ? "½" : outcome.result, `Game over: ${outcome.result}`);
+    return;
+  }
+  if (!game.state.legal.length) return;
+  const request = { checkpoint: $("checkpoint").value, fen: game.state.fen, steps: steps() };
+  api("/api/analyse", request).then((result) => {
+    if (S.game && S.game.state.fen === request.fen && $("checkpoint").value === request.checkpoint) showModelEval(result);
+  }).catch(showError);
+}
+
+function showModelEval(result) {
+  if (!result.value_trained) {
+    setBar("model-bar", 50, "?", "This checkpoint's value head was never trained, so Wombat has no evaluation. Its moves still work.", true);
+    return;
+  }
+  setBar("model-bar", result.win_white, Math.abs(result.pawns_white).toFixed(1),
+    `Wombat at T = ${result.steps}: ${formatPawns(result.pawns_white)} (White win chance ${result.win_white.toFixed(0)}%)`);
+}
+
+function setStockfishBar(evaluation) {
+  const mate = evaluation.mate_white;
+  const label = mate !== null && mate !== undefined ? `M${Math.abs(mate)}` : (Math.abs(evaluation.cp_white) / 100).toFixed(1);
+  setBar("sf-bar", evaluation.win_white, label, `Stockfish: ${describeEval(evaluation)}`);
+}
+
+function setBar(id, winWhite, text, title, untrained = false) {
+  const bar = $(id);
+  bar.classList.toggle("untrained", untrained);
+  bar.querySelector(".fill").style.height = `${winWhite.toFixed(1)}%`;
+  const label = bar.querySelector(".label");
+  label.textContent = text;
+  const whiteAhead = winWhite >= 50;
+  label.classList.toggle("dark", !whiteAhead);
+  const atBottom = whiteAhead !== (S.orientation === "black");
+  label.style.top = atBottom ? "auto" : "3px";
+  label.style.bottom = atBottom ? "3px" : "auto";
+  bar.title = title;
+}
+
+function describeEval(evaluation) {
+  const mate = evaluation.mate_white;
+  if (mate !== null && mate !== undefined) return `${mate > 0 ? "White" : "Black"} mates in ${Math.abs(mate)}`;
+  const pawns = evaluation.cp_white / 100;
+  return `eval ${pawns >= 0 ? "+" : ""}${pawns.toFixed(1)} (White ${evaluation.win_white.toFixed(0)}%)`;
+}
+
+function renderMoves() {
+  const game = S.game;
+  const list = $("moves");
+  if (!game) { list.innerHTML = ""; return; }
+  const parts = game.start.split(" ");
+  let number = parseInt(parts[5] || "1", 10);
+  const blackFirst = parts[1] === "b";
+  const cells = [];
+  if (blackFirst && game.state.sans.length) cells.push(`<span class="no">${number}.</span>`, "<span>...</span>");
+  const names = { model: "Wombat", human: "You", stockfish: "Stockfish", solution: "Puzzle solution", reply: "Puzzle opponent" };
+  game.state.sans.forEach((san, ply) => {
+    const whiteMove = blackFirst ? ply % 2 === 1 : ply % 2 === 0;
+    if (whiteMove) cells.push(`<span class="no">${number}.</span>`);
+    const note = game.notes[ply] || {};
+    const verdict = note.judge;
+    let title = names[note.who] || "";
+    let cls = "mv";
+    let text = escapeHtml(san);
+    if (verdict) {
+      cls += ` label-${verdict.label}`;
+      text += SUFFIX[verdict.label];
+      title += `: ${verdict.label}, gives up ${verdict.lost.toFixed(1)} win% points, accuracy ${verdict.accuracy.toFixed(0)}`;
+      if (verdict.best_san && verdict.best !== game.moves[ply]) title += `, Stockfish prefers ${verdict.best_san}`;
+    }
+    if (note.instead) title += ` (Wombat chose ${note.instead} instead)`;
+    title += `${title ? ". " : ""}Click to explain`;
+    if (ply === game.moves.length - 1) cls += " last";
+    if (S.explain && S.explain.ply === ply) cls += " explained";
+    const mark = note.mark === "correct" ? ' <span class="mark-ok">✓</span>' : "";
+    const instead = note.instead ? `<s class="mark-bad">${escapeHtml(note.instead)}</s> ` : "";
+    const who = note.who ? `<span class="who who-${note.who}"></span>` : "";
+    cells.push(`<span class="${cls}" data-ply="${ply}" title="${escapeHtml(title)}">${who}${instead}${text}${mark}</span>`);
+    if (!whiteMove) number += 1;
+  });
+  list.innerHTML = cells.join("");
+  if (!S.explain) list.scrollTop = list.scrollHeight;
+  $("explain-last").disabled = !game.moves.length;
+  $("moves-meta").textContent = game.state.outcome ? outcomeText(game.state.outcome) : "";
+  renderSummary();
+}
+
+function renderSummary() {
+  const groups = {};
+  for (const note of S.game.notes) {
+    if (!note.judge || !["model", "human", "stockfish"].includes(note.who)) continue;
+    const group = groups[note.who] || (groups[note.who] = { total: 0, count: 0, inaccuracy: 0, mistake: 0, blunder: 0 });
+    group.total += note.judge.accuracy;
+    group.count += 1;
+    if (note.judge.label !== "good") group[note.judge.label] += 1;
+  }
+  const names = { model: "Wombat", human: "You", stockfish: "Stockfish" };
+  const lines = Object.entries(groups).map(([who, group]) =>
+    `${names[who] || who}: <b>${(group.total / group.count).toFixed(1)}%</b> accuracy over ${group.count} moves`
+    + `${DOT}${group.inaccuracy} ?!${DOT}${group.mistake} ?${DOT}${group.blunder} ??`);
+  $("summary").innerHTML = lines.join("<br>");
+}
+
+/* ---------- Play ---------- */
+function engineOpponent() {
+  const level = $("play-opponent").value;
+  if (level === "you") return null;
+  return { label: level === "full" ? "Stockfish full strength" : `Stockfish ${level}`, body: { elo: level, movetime: 0.1 } };
+}
+
+function updatePlayCard() {
+  const engine = engineOpponent() !== null;
+  $("play-intro").textContent = engine
+    ? "Stockfish, limited to the chosen Elo (100 ms per move, 1 thread), plays Wombat. Each finished game counts in the match results."
+    : "Click one of your pieces, then a highlighted square. Wombat answers after thinking for T steps.";
+  $("play-color-label").textContent = engine ? "Stockfish plays" : "You play";
+  for (const node of document.querySelectorAll(".needs-engine-opponent")) node.classList.toggle("hidden", !engine);
+  $("play-undo").classList.toggle("hidden", engine);
+  $("legend-human").classList.toggle("hidden", S.mode !== "play" || engine);
+  $("legend-stockfish").classList.toggle("hidden", !(S.mode === "watch" || (S.mode === "play" && engine)));
+  updateMatchCard();
+}
+
+function newPlayGame() {
+  updatePlayCard();
+  const opponent = engineOpponent();
+  launch(async (t) => {
+    showError(null);
+    let side = $("play-color").value;
+    if (opponent) {
+      S.human = null;
+      $("play-info").textContent = "";
+      for (;;) {
+        const start = $("play-start").value === "random" ? (await call(t, "/api/position/random")).fen : START;
+        const engineSide = side === "random" ? (Math.random() < 0.5 ? "white" : "black") : side;
+        const modelColor = engineSide === "white" ? "black" : "white";
+        await playMatch(t, { start, modelColor, stockfish: opponent, plies: MAX_MATCH_PLIES, infoId: "play-info", autoId: "play-auto" });
+        if (!$("play-auto").checked) return;
+        await sleep(pauseMs() * 2, t);
+      }
+    }
+    $("play-info").textContent = "";
+    const start = $("play-start").value === "random" ? (await call(t, "/api/position/random")).fen : START;
+    if (side === "random") side = Math.random() < 0.5 ? "white" : "black";
+    const human = side;
+    S.human = human;
+    S.orientation = human;
+    S.analysis = null;
+    renderAnalysis();
+    await setGame(t, start);
+    await modelReply(t);
+  });
+}
+
+async function modelReply(t) {
+  const state = S.game.state;
+  if (state.outcome) { setStatus(`<b>${outcomeText(state.outcome)}</b>. Press New game to play again.`); return; }
+  if (state.turn === S.human) { setStatus(`Your move as <b>${S.human}</b>: click a piece, then a highlighted square.`); return; }
+  S.busy = true;
+  setStatus(`Wombat is thinking for <b>T = ${steps()}</b> steps...`);
+  const analysis = await modelMove(t, MODEL_DELAY_MS);
+  await push(t, analysis.move, { who: "model" });
+  S.busy = false;
+  const next = S.game.state;
+  setStatus(next.outcome
+    ? `Wombat played <b>${escapeHtml(analysis.san)}</b>. <b>${outcomeText(next.outcome)}</b>.`
+    : `Wombat played <b>${escapeHtml(analysis.san)}</b>. Your move.`);
+  renderBoard();
+}
+
+function humanMove(uci) {
+  launch(async (t) => {
+    await push(t, uci, { who: "human" });
+    await modelReply(t);
+  });
+}
+
+function undo() {
+  if (!S.game || S.mode !== "play" || !S.human) return;
+  launch(async (t) => {
+    const game = S.game;
+    const startBlack = game.start.split(" ")[1] === "b";
+    const turnAt = (length) => ((length % 2 === 0) !== startBlack ? "white" : "black");
+    let length = game.moves.length;
+    let poppedHuman = false;
+    while (length > 0) {
+      length -= 1;
+      if ((game.notes[length] || {}).who === "human") poppedHuman = true;
+      if (poppedHuman && turnAt(length) === S.human) break;
+    }
+    if (length !== game.moves.length) await pop(t, game.moves.length - length);
+    await modelReply(t);
+  });
+}
+
+/* ---------- Puzzles ---------- */
+function puzzleQuery() {
+  const params = new URLSearchParams();
+  if ($("min-rating").value) params.set("min_rating", $("min-rating").value);
+  if ($("max-rating").value) params.set("max_rating", $("max-rating").value);
+  return params.toString();
+}
+
+function renderTally() {
+  const { solved, attempted } = S.puzzle;
+  $("tally").textContent = `${solved} / ${attempted}`;
+  $("tally-note").textContent = attempted
+    ? `solved / attempted (${((solved / attempted) * 100).toFixed(0)}%)` : "solved / attempted";
+  const rows = S.puzzle.history.slice().reverse().map((item) =>
+    `<tr><td><a href="https://lichess.org/training/${encodeURIComponent(item.id)}" target="_blank" rel="noopener">${escapeHtml(item.id)}</a>${item.retry ? ' <span class="hint">retry</span>' : ""}</td>`
+    + `<td>${item.rating}</td><td>${item.steps}</td><td>${item.right} / ${item.total}</td>`
+    + `<td class="${item.solved ? "mark-ok" : "mark-bad"}">${item.solved ? "solved" : "failed"}</td></tr>`);
+  $("puzzle-history").innerHTML = rows.join("") || '<tr><td colspan="5" class="empty">No puzzles yet.</td></tr>';
+}
+
+function renderPuzzleMarks() {
+  $("puzzle-marks").innerHTML = S.puzzle.marks.map((mark, index) =>
+    `<span class="${mark ? "mark-ok" : "mark-bad"}">move ${index + 1} ${mark ? "✓" : "✗"}</span>`).join("");
+}
+
+function runPuzzles(retry) {
+  launch(async (t) => {
+    showError(null);
+    let again = retry && S.puzzle.data;
+    for (;;) {
+      await playPuzzle(t, again ? S.puzzle.data : null);
+      again = false;
+      if (!$("puzzle-auto").checked) return;
+      await sleep(pauseMs() * 2, t);
+    }
+  });
+}
+
+async function playPuzzle(t, known) {
+  // The previous puzzle's result must not cover the next one (auto-continue and Retry).
+  banner("");
+  const puzzle = known || await call(t, `/api/puzzle/random?${puzzleQuery()}`);
+  const total = puzzle.steps.length;
+  S.puzzle.data = puzzle;
+  S.puzzle.marks = [];
+  renderPuzzleMarks();
+  S.orientation = puzzle.steps[0].fen.split(" ")[1] === "w" ? "white" : "black";
+  S.analysis = null;
+  renderAnalysis();
+  $("puzzle-link").innerHTML = `<a href="https://lichess.org/training/${encodeURIComponent(puzzle.puzzle_id)}" target="_blank" rel="noopener" title="Open on Lichess">${escapeHtml(puzzle.puzzle_id)}</a>`;
+  $("puzzle-info").innerHTML = `Rating <b>${puzzle.rating}</b>${DOT}${total} Wombat move${total > 1 ? "s" : ""} to find`
+    + `${DOT}Wombat plays ${S.orientation}${DOT}T = ${steps()}`;
+  await setGame(t, puzzle.steps[0].fen);
+  let failed = false;
+  for (const [index, step] of puzzle.steps.entries()) {
+    setStatus(`Puzzle move ${index + 1} of ${total}: Wombat (${S.orientation}) is looking for the best move at <b>T = ${steps()}</b>...`);
+    await sleep(pauseMs() / 2, t);
+    const analysis = await modelMove(t, pauseMs() / 2, step.solution);
+    const correct = analysis.solves;
+    S.puzzle.marks.push(correct);
+    renderPuzzleMarks();
+    if (correct) {
+      await push(t, analysis.move, { who: "model", mark: "correct" });
+      const mateInstead = analysis.move !== step.solution;
+      setStatus(`<span class="mark-ok">✓ Correct:</span> <b>${escapeHtml(analysis.san)}</b>${mateInstead ? " (a different move, but it mates)" : ""}.`);
+      if (mateInstead) break;
+    } else {
+      failed = true;
+      showArrows([{ uci: analysis.move, color: "red" }, { uci: step.solution, color: "green" }]);
+      setStatus(`<span class="mark-bad">✗ Wrong:</span> Wombat chose <b>${escapeHtml(analysis.san)}</b> (red arrow); the solution is <b>${escapeHtml(step.solution_san)}</b> (green). Playing the solution to continue the line.`);
+      await sleep(pauseMs() * 1.5, t);
+      await push(t, step.solution, { who: "solution", mark: "wrong", instead: analysis.san, insteadUci: analysis.move });
+    }
+    if (step.reply) {
+      await sleep(pauseMs(), t);
+      await push(t, step.reply, { who: "reply" });
+    }
+  }
+  const right = S.puzzle.marks.filter(Boolean).length;
+  const retry = Boolean(known);
+  if (!retry) {
+    S.puzzle.attempted += 1;
+    if (!failed) S.puzzle.solved += 1;
+  }
+  S.puzzle.history.push({ id: puzzle.puzzle_id, rating: puzzle.rating, steps: steps(), right, total: S.puzzle.marks.length, solved: !failed, retry });
+  renderTally();
+  banner(failed ? "Failed" : "Solved", failed ? "bad" : "ok", `${right} of ${S.puzzle.marks.length} Wombat moves right at T = ${steps()}`);
+  const next = $("puzzle-auto").checked ? " Next puzzle shortly." : " Press Next puzzle, or Retry to run it again at another T.";
+  setStatus((failed ? `<span class="mark-bad">Puzzle failed</span> (${right} of ${S.puzzle.marks.length} moves right).`
+    : '<span class="mark-ok">Puzzle solved.</span>') + next);
+}
+
+/* ---------- Watch ---------- */
+function runWatch() {
+  launch(async (t) => {
+    showError(null);
+    for (;;) {
+      await watchGame(t);
+      if (!$("watch-auto").checked) return;
+      await sleep(pauseMs() * 2, t);
+    }
+  });
+}
+
+async function watchGame(t) {
+  const start = $("watch-start").value === "random" ? (await call(t, "/api/position/random")).fen : START;
+  const versus = $("watch-sf").checked && S.status && S.status.stockfish;
+  const nodes = Math.max(1, parseInt($("watch-nodes").value, 10) || 1000);
+  await playMatch(t, {
+    start,
+    modelColor: versus ? (Math.random() < 0.5 ? "white" : "black") : "both",
+    stockfish: versus ? { label: `Stockfish ${nodes} nodes`, body: { nodes } } : null,
+    plies: Math.max(1, parseInt($("watch-plies").value, 10) || 20),
+    infoId: "watch-info",
+    autoId: "watch-auto",
+  });
+}
+
+/* ---------- Matches: Wombat against itself or Stockfish ---------- */
+const VERDICT_TEXT = { win: "Wombat won", draw: "drawn", loss: "Wombat lost" };
+
+function renderMatches() {
+  const scores = [...S.matches.scores.entries()].map(([label, score]) => {
+    const games = score.win + score.draw + score.loss;
+    const percent = (100 * (score.win + score.draw / 2)) / games;
+    return `<tr><td>${escapeHtml(label)}</td><td>${score.win}</td><td>${score.draw}</td><td>${score.loss}</td>`
+      + `<td>${percent.toFixed(0)}% of ${games}</td></tr>`;
+  });
+  $("match-scores").innerHTML = scores.join("")
+    || '<tr><td colspan="5" class="empty">No finished games against Stockfish yet.</td></tr>';
+  const rows = S.matches.games.slice().reverse().map((game) =>
+    `<tr><td>${game.number}</td><td>${game.wombat}</td><td>${escapeHtml(game.opponent)}</td>`
+    + `<td>${game.steps}</td><td>${escapeHtml(game.result)}</td><td>${game.plies}</td></tr>`);
+  $("match-history").innerHTML = rows.join("") || '<tr><td colspan="6" class="empty">No games yet.</td></tr>';
+}
+
+// Plays one game move by move; modelColor "both" is self-play, otherwise Stockfish has the other side.
+async function playMatch(t, { start, modelColor, stockfish, plies, infoId, autoId }) {
+  S.orientation = modelColor === "black" ? "black" : "white";
+  S.analysis = null;
+  renderAnalysis();
+  await setGame(t, start);
+  $(infoId).innerHTML = stockfish
+    ? `Wombat plays <b>${modelColor}</b> at T = ${steps()} against <b>${escapeHtml(stockfish.label)}</b>.`
+    : `Wombat plays both sides at T = ${steps()}.`;
+  const limit = Number.isFinite(plies) ? ` of ${plies}` : "";
+  for (let ply = 0; ply < plies && !S.game.state.outcome; ply += 1) {
+    const turn = S.game.state.turn;
+    const engine = stockfish && turn !== modelColor;
+    setStatus(`Move ${ply + 1}${limit}: ${engine ? escapeHtml(stockfish.label) : "Wombat"} (${turn}) to play.`);
+    await sleep(pauseMs() / 2, t);
+    if (engine) {
+      const reply = await call(t, "/api/stockfish/move", { fen: S.game.state.fen, ...stockfish.body });
+      showArrows([{ uci: reply.move, color: "green" }]);
+      await sleep(pauseMs() / 2, t);
+      await push(t, reply.move, { who: "stockfish" });
+    } else {
+      const analysis = await modelMove(t, pauseMs() / 2);
+      await push(t, analysis.move, { who: "model" });
+    }
+  }
+  const outcome = S.game.state.outcome;
+  const winner = outcome && outcome.result === "1-0" ? "white" : outcome && outcome.result === "0-1" ? "black" : null;
+  let verdict = null;
+  if (stockfish && outcome) verdict = !winner ? "draw" : winner === modelColor ? "win" : "loss";
+  const record = {
+    number: S.matches.games.length + 1,
+    wombat: modelColor,
+    opponent: stockfish ? stockfish.label : "itself",
+    steps: steps(),
+    result: outcome ? `${outcome.result} ${outcome.termination.replace(/_/g, " ")}` : "unfinished",
+    plies: S.game.moves.length,
+  };
+  if (verdict) {
+    record.result += ` (${VERDICT_TEXT[verdict]})`;
+    const score = S.matches.scores.get(stockfish.label) || { win: 0, draw: 0, loss: 0 };
+    score[verdict] += 1;
+    S.matches.scores.set(stockfish.label, score);
+  }
+  if (!outcome && S.status && S.status.stockfish) {
+    record.result += `, ${describeEval(await call(t, "/api/eval", { fen: S.game.state.fen }))}`;
+  }
+  S.matches.games.push(record);
+  renderMatches();
+  updateMatchCard();
+  const summary = outcome
+    ? `<b>${outcomeText(outcome)}</b>${verdict ? `: ${VERDICT_TEXT[verdict]}` : ""}.`
+    : `Stopped after ${S.game.moves.length} plies: ${escapeHtml(record.result)}.`;
+  setStatus(summary + ($(autoId).checked ? " A new game starts shortly." : " Press New game for another."));
+}
+
+function updateMatchCard() {
+  const show = S.mode === "watch"
+    || (S.mode === "play" && ($("play-opponent").value !== "you" || S.matches.games.length > 0));
+  $("match-card").classList.toggle("hidden", !show);
+}
+
+/* ---------- Wiring ---------- */
+function setMode(mode) {
+  S.mode = mode;
+  for (const button of document.querySelectorAll(".tabs button")) button.classList.toggle("active", button.dataset.mode === mode);
+  for (const panel of document.querySelectorAll("[data-panel]")) {
+    panel.classList.toggle("hidden", !panel.dataset.panel.split(" ").includes(mode));
+  }
+  $("legend-puzzle").classList.toggle("hidden", mode !== "puzzle");
+  $("legend-wrong").classList.toggle("hidden", mode !== "puzzle");
+  updatePlayCard();
+  S.arrows = [];
+  if (!S.loaded) return;  // init() starts the chosen mode once checkpoints are listed
+  if (mode === "play") newPlayGame();
+  if (mode === "puzzle") runPuzzles(false);
+  if (mode === "watch") runWatch();
+}
+
+function stop(text) { launch(async () => { setStatus(text); renderBoard(); }); }
+
+async function init() {
+  buildBoard();
+  const kept = loadSettings();
+  updateSettingLabels();
+  // Shows the start position while the checkpoint list loads.
+  S.game = { start: START, moves: [], notes: [], fens: [START],
+    state: { fen: START, turn: "white", legal: [], sans: [], check: null, outcome: null } };
+  renderBoard();
+  for (const button of document.querySelectorAll(".tabs button")) button.addEventListener("click", () => setMode(button.dataset.mode));
+  for (const id of ["steps", "pause"]) $(id).addEventListener("input", () => { updateSettingLabels(); saveSettings(); });
+  for (const id of ["checkpoint", "play-color", "play-start", "min-rating", "max-rating", "watch-start", "watch-plies",
+    "watch-nodes", "puzzle-auto", "watch-auto", "watch-sf", "play-auto", "play-opponent"]) $(id).addEventListener("change", () => { updateSettingLabels(); saveSettings(); });
+  $("play-opponent").addEventListener("change", () => { if (S.mode === "play") newPlayGame(); });
+  $("play-stop").addEventListener("click", () => stop("Match stopped. Press New game to continue."));
+  for (const id of ["steps", "checkpoint"]) $(id).addEventListener("change", () => { reanalyse(); refreshModelEval(); fetchExplanation(); });
+  $("moves").addEventListener("click", (event) => {
+    const node = event.target.closest("[data-ply]");
+    if (node) explainPly(parseInt(node.dataset.ply, 10));
+  });
+  $("explain-last").addEventListener("click", () => { if (S.game) explainPly(S.game.moves.length - 1); });
+  $("explain-close").addEventListener("click", closeExplain);
+  $("stockfish").addEventListener("change", () => {
+    saveSettings();
+    refreshEval();
+    if (stockfishOn() && S.game) S.game.moves.forEach((_, ply) => judge(S.game, ply));
+    if (S.game) renderMoves();
+  });
+  $("play-new").addEventListener("click", newPlayGame);
+  $("play-undo").addEventListener("click", undo);
+  $("play-flip").addEventListener("click", () => {
+    S.orientation = S.orientation === "white" ? "black" : "white";
+    renderBoard();
+    refreshEval();
+  });
+  $("puzzle-next").addEventListener("click", () => runPuzzles(false));
+  $("puzzle-retry").addEventListener("click", () => runPuzzles(true));
+  $("puzzle-stop").addEventListener("click", () => stop("Puzzles stopped. Press Next puzzle to continue."));
+  $("tally-reset").addEventListener("click", () => { S.puzzle.solved = 0; S.puzzle.attempted = 0; S.puzzle.history = []; renderTally(); });
+  $("watch-start-btn").addEventListener("click", runWatch);
+  $("watch-stop").addEventListener("click", () => stop("Watching stopped. Press New game to continue."));
+  $("help-open").addEventListener("click", openHelp);
+  $("help-close").addEventListener("click", () => { $("help").close(); saveSettings(); });
+
+  try {
+    S.status = await api("/api/status");
+    $("stockfish-note").textContent = S.status.stockfish ? "1 CPU thread, 20k nodes" : "Stockfish not configured";
+    $("stockfish").disabled = !S.status.stockfish;
+    $("watch-sf").disabled = !S.status.stockfish;
+    if (!S.status.stockfish) {
+      $("stockfish").checked = false;
+      $("watch-sf").checked = false;
+      $("play-opponent").value = "you";
+      for (const option of $("play-opponent").options) option.disabled = option.value !== "you";
+    }
+    if (!S.status.puzzles) document.querySelector('.tabs [data-mode="puzzle"]').disabled = true;
+    $("server-note").textContent = "Loading checkpoints...";
+    const listing = await api("/api/checkpoints");
+    S.checkpoints = listing.checkpoints;
+    S.loaded = true;
+    const select = $("checkpoint");
+    const groups = new Map();
+    for (const info of listing.checkpoints) {
+      if (!groups.has(info.run)) {
+        const group = document.createElement("optgroup");
+        group.label = info.run;
+        groups.set(info.run, group);
+        select.appendChild(group);
+      }
+      const option = document.createElement("option");
+      option.value = info.id;
+      option.textContent = checkpointLabel(info);
+      groups.get(info.run).appendChild(option);
+    }
+    const wanted = listing.checkpoints.some((info) => info.id === kept.checkpoint) ? kept.checkpoint : listing.default;
+    if (wanted) select.value = wanted;
+    $("server-note").textContent = `${listing.checkpoints.length} checkpoints${DOT}inference on CPU`;
+    updateSettingLabels();
+  } catch (error) {
+    showError(error);
+  }
+  renderTally();
+  renderMatches();
+  refreshEval();
+  S.loaded = true;
+  setMode(S.mode);
+  if (!kept.helpSeen) openHelp();
+}
+
+// showModal focuses the close button at the bottom, so scroll back to the start.
+function openHelp() {
+  $("help").showModal();
+  $("help").scrollTop = 0;
+}
+
+init();
+</script>
+</body>
+</html>

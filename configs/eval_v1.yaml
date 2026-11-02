@@ -1,0 +1,5 @@
+schema: wombat.eval-config.v1
+seed: 0
+reasoning_steps: [1, 2, 4, 8, 16, 32, 64, 128]
+stockfish_nodes: 65536
+puzzle_rating_buckets: [0, 1500, 2000, 2500, 3000, 10000]

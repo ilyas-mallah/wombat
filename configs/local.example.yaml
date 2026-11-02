@@ -1,0 +1,5 @@
+executables:
+  stockfish: C:/path/to/stockfish.exe
+  cutechess_cli: C:/path/to/cutechess-cli.exe
+  ordo: C:/path/to/ordo.exe
+

@@ -1,0 +1,2 @@
+"""UCI engine adapter."""
+
