@@ -73,6 +73,18 @@ def select_move(
     skips moves that stalemate or repeat a third time (``guard_draws``).
     """
 
+    return select_move_and_value(provider, board, reasoning_steps, draw_guard=draw_guard)[0]
+
+
+def select_move_and_value(
+    provider: PolicyProvider,
+    board: chess.Board,
+    reasoning_steps: int,
+    *,
+    draw_guard: float | None = None,
+) -> tuple[chess.Move, float | None]:
+    """``select_move`` with the position value it read, or None when it read none."""
+
     value: float | None = None
     if draw_guard is not None and isinstance(provider, ValuedPolicyProvider):
         raw, value = provider.policy_and_value(board, reasoning_steps)
@@ -88,11 +100,11 @@ def select_move(
         raise ValueError("cannot select a move in a terminal position")
     masked = np.where(mask, logits, -np.inf)
     if value is None or draw_guard is None or value <= draw_guard:
-        return action_to_move(board, int(np.argmax(masked)))
+        return action_to_move(board, int(np.argmax(masked))), value
     legal = np.flatnonzero(mask)
     order = legal[np.argsort(-logits[legal], kind="stable")]
     ranked = [action_to_move(board, int(action)) for action in order]
-    return guard_draws(board, ranked, value, draw_guard)
+    return guard_draws(board, ranked, value, draw_guard), value
 
 
 def evaluate_agreement(

@@ -5,11 +5,13 @@ from io import StringIO
 from pathlib import Path
 
 import chess
+import numpy as np
 import pytest
 import torch
 
 from wombat.cli import main
-from wombat.engine.uci import run_uci
+from wombat.engine.uci import load_provider, run_uci
+from wombat.eval.puzzle_corpus_eval import load_checkpoint
 from wombat.model import NetworkConfig, WombatNetwork
 from wombat.policy import FixturePolicy
 
@@ -71,3 +73,69 @@ def test_checkpoint_engine_answers_go_with_legal_move(
     board.push_uci("e2e4")
     assert len(best) == 1
     assert chess.Move.from_uci(best[0]) in board.legal_moves
+
+
+def test_uci_device_option_reaches_the_checkpoint_loader(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    loaded: list[tuple[Path, str]] = []
+
+    def fake_loader(checkpoint: Path, device_name: str = "cpu") -> FixturePolicy:
+        loaded.append((checkpoint, device_name))
+        return FixturePolicy({})
+
+    monkeypatch.setattr("wombat.engine.uci.load_provider", fake_loader)
+    monkeypatch.setattr("sys.stdin", StringIO("quit\n"))
+    assert main(["uci", "--checkpoint", str(tmp_path / "m.pt"), "--device", "cuda"]) == 0
+    monkeypatch.setattr("sys.stdin", StringIO("quit\n"))
+    assert main(["uci", "--checkpoint", str(tmp_path / "m.pt")]) == 0
+    assert loaded == [(tmp_path / "m.pt", "cuda"), (tmp_path / "m.pt", "cpu")]
+
+
+def test_load_provider_builds_the_model_on_the_requested_device(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    requested: list[str] = []
+    real_load = load_checkpoint
+
+    def spy(checkpoint: Path, device: torch.device) -> WombatNetwork:
+        requested.append(device.type)
+        return real_load(checkpoint, torch.device("cpu"))
+
+    checkpoint = tmp_path / "tiny.pt"
+    torch.save(
+        {"model": WombatNetwork(TINY).state_dict(), "model_config": asdict(TINY)}, checkpoint
+    )
+    monkeypatch.setattr("wombat.eval.puzzle_corpus_eval.load_checkpoint", spy)
+    monkeypatch.setattr("wombat.model.adapter.TorchPolicyProvider.__init__", lambda *a, **k: None)
+    load_provider(checkpoint, "cuda")
+    load_provider(checkpoint)
+    assert requested == ["cuda", "cpu"]
+
+
+def test_go_reports_the_model_value_so_a_gui_can_apply_maxmoves() -> None:
+    board = chess.Board()
+
+    class Valued(FixturePolicy):
+        def policy_and_value(
+            self, board: chess.Board, reasoning_steps: int
+        ) -> tuple[np.ndarray, float]:
+            return self.policy_logits(board, reasoning_steps), 0.25
+
+    output = StringIO()
+    run_uci(
+        StringIO("setoption name ReasoningSteps value 64\nposition startpos\ngo\nquit\n"),
+        output,
+        Valued({board.fen(): "e2e4"}),
+    )
+    lines = output.getvalue().splitlines()
+    assert lines[-2:] == ["info depth 64 score cp 250", "bestmove e2e4"]
+
+
+def test_go_without_a_value_sends_only_the_move() -> None:
+    board = chess.Board()
+    output = StringIO()
+    run_uci(
+        StringIO("position startpos\ngo\nquit\n"), output, FixturePolicy({board.fen(): "e2e4"})
+    )
+    assert output.getvalue().splitlines() == ["bestmove e2e4"]

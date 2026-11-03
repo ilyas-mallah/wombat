@@ -8,7 +8,7 @@ from typing import TextIO
 
 import chess
 
-from wombat.eval.agreement import DRAW_GUARD_VALUE, select_move
+from wombat.eval.agreement import DRAW_GUARD_VALUE, select_move_and_value
 from wombat.policy import DeterministicRandomPolicy, PolicyProvider, SelectingPolicyProvider
 from wombat.selection import SELECT_MODES
 
@@ -16,16 +16,17 @@ MAX_REASONING_STEPS = 128
 CHECKPOINT_REASONING_STEPS = 8
 
 
-def load_provider(checkpoint: Path) -> PolicyProvider:
-    """A trained checkpoint served on two CPU threads."""
+def load_provider(checkpoint: Path, device_name: str = "cpu") -> PolicyProvider:
+    """Load a trained checkpoint on the requested match device."""
 
     import torch
 
     from wombat.eval.puzzle_corpus_eval import load_checkpoint
     from wombat.model.adapter import TorchPolicyProvider
 
-    torch.set_num_threads(2)
-    device = torch.device("cpu")
+    if device_name == "cpu":
+        torch.set_num_threads(2)
+    device = torch.device(device_name)
     return TorchPolicyProvider(load_checkpoint(checkpoint, device), device, checkpoint=checkpoint)
 
 
@@ -108,7 +109,12 @@ def run_uci(
                 if board.is_game_over():
                     send("bestmove 0000")
                 else:
-                    move = select_move(provider, board, reasoning_steps, draw_guard=draw_guard)
+                    move, model_value = select_move_and_value(
+                        provider, board, reasoning_steps, draw_guard=draw_guard
+                    )
+                    if model_value is not None:
+                        # The model value x1000 in centipawn form, so a GUI can apply -maxmoves.
+                        send(f"info depth {reasoning_steps} score cp {round(model_value * 1000)}")
                     send(f"bestmove {move.uci()}")
             elif command == "stop":
                 continue
@@ -119,12 +125,15 @@ def run_uci(
     return 0
 
 
-def main(checkpoint: Path | None = None) -> int:
+def main(checkpoint: Path | None = None, device_name: str = "cpu") -> int:
     """Serve ``checkpoint`` when given, otherwise the deterministic random policy."""
 
     if checkpoint is None:
         return run_uci()
-    return run_uci(provider=load_provider(checkpoint), reasoning_steps=CHECKPOINT_REASONING_STEPS)
+    return run_uci(
+        provider=load_provider(checkpoint, device_name),
+        reasoning_steps=CHECKPOINT_REASONING_STEPS,
+    )
 
 
 if __name__ == "__main__":

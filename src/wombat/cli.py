@@ -8,6 +8,7 @@ from hashlib import sha256
 import json
 import platform
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -238,6 +239,68 @@ def _match_smoke(output: Path) -> int:
         json.dumps(summary, indent=2) + "\n", encoding="utf-8"
     )
     print(result.stdout)
+    return 0
+
+
+def _evaluate_match(args: argparse.Namespace) -> int:
+    import chess
+
+    from wombat.eval.games import select_openings
+    from wombat.eval.matches import checkpoint_match_command, summarize_pgn
+    from wombat.settings import load_executables
+
+    if args.first_steps == args.second_steps:
+        raise SystemExit("--first-steps and --second-steps must differ")
+    cutechess = load_executables()["cutechess_cli"]
+    if cutechess is None:
+        raise SystemExit("Cute Chess CLI is not configured")
+    args.output.mkdir(parents=True, exist_ok=True)
+    fens = select_openings(args.openings, args.pairs, seed=args.seed)
+    openings = args.output / "openings.epd"
+    openings.write_text("\n".join(chess.Board(fen).epd() for fen in fens) + "\n", encoding="utf-8")
+    pgn = args.output / "games.pgn"
+    command = checkpoint_match_command(
+        Path(cutechess),
+        Path(sys.executable),
+        Path.cwd(),
+        args.checkpoint.resolve(),
+        openings.resolve(),
+        pgn.resolve(),
+        first_steps=args.first_steps,
+        second_steps=args.second_steps,
+        pairs=args.pairs,
+        device=args.device,
+        max_moves=args.max_moves,
+        concurrency=args.concurrency,
+    )
+    with (args.output / "cutechess.log").open("w", encoding="utf-8") as log:
+        completed = subprocess.run(
+            command,
+            cwd=Path.cwd(),
+            check=False,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=args.timeout,
+        )
+    if completed.returncode != 0:
+        raise RuntimeError(f"Cute Chess failed, see {args.output / 'cutechess.log'}")
+    summary = summarize_pgn(pgn, f"Wombat-H{args.first_steps}", f"Wombat-H{args.second_steps}")
+    report = {
+        "schema": "wombat.paired-compute-match.v1",
+        "checkpoint": str(args.checkpoint),
+        "first_steps": args.first_steps,
+        "second_steps": args.second_steps,
+        "device": args.device,
+        "seed": args.seed,
+        "openings": str(args.openings),
+        "command": command,
+        **summary,
+    }
+    (args.output / "match_summary.json").write_text(
+        json.dumps(report, indent=2) + "\n", encoding="utf-8"
+    )
+    print(json.dumps(report, indent=2))
     return 0
 
 
@@ -1419,6 +1482,23 @@ def build_parser() -> argparse.ArgumentParser:
         "match-smoke", help="run a two-game color-swapped Cute Chess UCI match"
     )
     match_smoke.add_argument("--output", type=Path, default=Path("matches/smoke"))
+    match = subparsers.add_parser(
+        "evaluate-match",
+        help="play one checkpoint against itself at two thinking budgets in Cute Chess",
+    )
+    match.add_argument("--checkpoint", type=Path, required=True)
+    match.add_argument("--first-steps", type=int, default=1, help="T of the reference engine")
+    match.add_argument("--second-steps", type=int, default=64, help="T of the engine scored")
+    match.add_argument(
+        "--pairs", type=int, default=100, help="openings, each played with both colours"
+    )
+    match.add_argument("--openings", type=Path, default=Path("data/processed/games-v1/test"))
+    match.add_argument("--seed", type=int, default=0)
+    match.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
+    match.add_argument("--max-moves", type=int, default=150, help="full moves before a draw")
+    match.add_argument("--concurrency", type=int, default=1, help="games played at once")
+    match.add_argument("--timeout", type=float, help="seconds before the match is abandoned")
+    match.add_argument("--output", type=Path, default=Path("runs/paired-compute-match"))
     trace_smoke = subparsers.add_parser(
         "trace-smoke", help="capture H0..Hn, policy/value, scratchpad, and attention artifacts"
     )
@@ -2165,7 +2245,8 @@ def build_parser() -> argparse.ArgumentParser:
     quality.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     quality.add_argument("--output", type=Path, default=Path("runs/quality-curve/report.json"))
     uci = subparsers.add_parser("uci", help="run the minimal UCI engine on standard input/output")
-    uci.add_argument("--checkpoint", type=Path, help="play this checkpoint on CPU")
+    uci.add_argument("--checkpoint", type=Path, help="play this checkpoint")
+    uci.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     play = subparsers.add_parser(
         "play-stockfish", help="rate a checkpoint in Elo from paired games against Stockfish"
     )
@@ -2259,6 +2340,8 @@ def main(argv: list[str] | None = None) -> int:
         return _evaluate_regret_curve(args)
     if args.command == "match-smoke":
         return _match_smoke(args.output)
+    if args.command == "evaluate-match":
+        return _evaluate_match(args)
     if args.command == "trace-smoke":
         return _trace_smoke(args.output, args.steps, args.device)
     if args.command == "build-puzzles":
@@ -2322,7 +2405,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "uci":
         from wombat.engine.uci import main as uci_main
 
-        return uci_main(args.checkpoint)
+        return uci_main(args.checkpoint, args.device)
     if args.command == "play-stockfish":
         return _play_stockfish(args)
     if args.command == "explain-move":
