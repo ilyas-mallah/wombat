@@ -9,8 +9,13 @@ The project is paused. The last training experiment ran on 2026-09-27. The test 
 registered before any training. It asked that T = 64 steps beat T = 1 by 100 Elo over 1,000 paired games of one
 checkpoint, on two seeds. A smaller version of it was played afterwards: L2 at T = 64 scored 0.928 against itself at
 T = 1 over 300 games, about +445 Elo. It is one checkpoint and one seed, so the registered test itself is still open.
-Extra steps help up to the number the network was trained for and not beyond. The best checkpoint trails DeepMind's ChessBench 9M model by a wide margin.
-`docs/plan.md` records the failed experiments as plainly as the ones that worked.
+Extra steps help up to the number the network was trained for and not beyond. At T = 8 it scored 0.968 against T = 1
+over 300 games, and at T = 64 it scored 0.305 against T = 8.
+
+DeepMind's ChessBench 9M model, the published model Wombat is measured against, trained on 15.3 billion action-value
+labels ([Ruoss et al., 2024](https://arxiv.org/abs/2402.04494)). Wombat's error rate falls about 0.85x per doubling of
+training samples in a straight line. That puts the 9M's level about ten doublings, about 15 billion samples, away. It
+is a hypothesis, not a result. `docs/plan.md` records the failed experiments as plainly as the ones that worked.
 
 ## The question
 
