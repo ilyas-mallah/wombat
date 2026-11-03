@@ -477,7 +477,7 @@ dialog .close-row { display: flex; justify-content: flex-end; margin-top: 16px; 
       <code>pawns = ln(W / (1 - W)) / 0.368208</code> with W clamped to 0.001..0.999. The <b>Wombat bar</b>
       left of the board shows it for the current position at the current T, and each candidate's
       <b>eval</b> column is Wombat's per-move value after that move.</li>
-    <li><b>Value head untrained</b>: puzzle-trained checkpoints (all <code>runs/v6-*</code>) only learned
+    <li><b>Value head untrained</b>: checkpoints trained on puzzles alone learned
       to pick moves, so their evaluations would be noise. The page shows "value head untrained" and a
       striped bar instead of a number; their moves are still meaningful.</li>
     <li><b>Snapshots</b>: game-training runs save <code>snapshot-step-*.pt</code> files every few thousand

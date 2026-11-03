@@ -196,7 +196,7 @@ class CheckpointIndex:
         self.info(identifier)
         return self._paths[identifier]
 
-    def default(self, preferred: Iterable[str] = ("runs/v6-main/checkpoint.pt",)) -> str | None:
+    def default(self, preferred: Iterable[str] = ()) -> str | None:
         listed = self.list()
         ids = {info.id for info in listed}
         for item in preferred:
