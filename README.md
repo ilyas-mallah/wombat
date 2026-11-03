@@ -62,8 +62,7 @@ A home RTX 3070 Ti with 8 GB of memory ran most pilots. A rented RTX 5090 with 3
 part of the Stockfish labelling.
 
 Every experiment's gate is written in `docs/plan.md` before its run. This repository has a fresh history, so the dates
-in the plan are the record of that order. The commit hashes quoted there belong to the original history, which is not
-published.
+in the plan are the record of that order.
 
 ## Results
 
@@ -118,9 +117,12 @@ L2's validation gain from T = 1 to T = 8 grew with training. It was +7.2 points 
 
 The registered success test was not run as registered. It asked that T = 64 beat T = 1 by 100 Elo over 1,000 paired
 games on two training seeds ("Success gate"). L2 and L3 were each trained on one seed, seed 0 in their configs. A
-smaller match was played on 2026-11-03: L2 at T = 64 against L2 at T = 1, 150 openings with both colours, 300 games,
-no clock or node limit. T = 64 scored 0.928 (+260 =37 -3), 95% interval 0.906 to 0.951, about +445 Elo (+393 to +516).
-It is one checkpoint, one set of openings and one seed, and T = 64 was not played against T = 8.
+smaller match was played on 2026-11-03. It was L2 at T = 64 against L2 at T = 1 on 150 openings with both colours, 300
+games, with no clock or node limit. T = 64 scored 0.928 (+260 =37 -3), 95% interval 0.906 to 0.951, about +445 Elo (+393 to +516).
+Two more matches of the same design followed. T = 64 against T = 8 scored 0.305 for T = 64 (+77 =29 -194, interval 0.260
+to 0.350, about -143 Elo). T = 8 against T = 1 scored 0.968 for T = 8 (+281 =19 -0, interval 0.954 to 0.982). So the whole
+gain over T = 1 is already there at T = 8 ("Item 28", "Item 29"). All three matches are one checkpoint, one set of
+openings and one seed, with a deterministic move rule.
 
 No model gained beyond its trained depth. Pilots v10 to v12 failed gate E1, v13 failed F2 and v14 failed F2'. Each gate
 asked for gains past the trained depth (sections "v10 outcome" to "v14 outcome"). L2's Lichess accuracy peaks at 88.8
@@ -161,8 +163,8 @@ with training ("ChessBench 9M on our held-out data", "Goal and backlog", "Evalua
 
 ## What is not shown
 
-Recurrence was not shown to make Wombat stronger with more compute beyond the trained depth. The 300-game match of
-T = 64 against T = 1 is one checkpoint on one seed, and the registered 1,000-game, two-seed test was not played.
+Recurrence was not shown to make Wombat stronger with more compute beyond the trained depth. The 300-game matches are
+one checkpoint on one seed, and the registered 1,000-game, two-seed test was not played.
 
 Wombat was not shown to beat a feedforward network of the same size.
 
@@ -212,6 +214,21 @@ wombat uci --checkpoint wombat-l2-cooled.pt
 ```
 
 The UCI option `ReasoningSteps` sets T. The default is 8.
+
+The visualizer lists files named `checkpoint*.pt` under a folder. Save a downloaded checkpoint as
+`runs/l2/checkpoint.pt` and start it with `python -m wombat.visualizer`, which serves http://127.0.0.1:8765/. The
+page started with only that checkpoint present. Its puzzles and sample positions read data folders that are not
+included.
+
+### What can be rerun
+
+The tests and playing a checkpoint need nothing beyond the checkpoint file. The three thinking-budget matches are played
+by `wombat evaluate-match`, for example
+`wombat evaluate-match --checkpoint wombat-l2-cooled.pt --first-steps 1 --second-steps 64 --pairs 150 --concurrency 3
+--seed 0 --device cuda`. It needs Cute Chess CLI and openings from `data/processed/games-v1/test`. That folder comes from
+`wombat build-game-corpus` on the Lichess evaluation database (22 GB, see `configs/downloads.yaml`). The corpus, the
+Stockfish labels, the training runs and the raw game files are not in this repository. The other numbers can be read
+in `docs/plan.md` but not recomputed from it.
 
 ## Layout
 
