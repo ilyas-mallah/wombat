@@ -1879,7 +1879,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "share of each game batch's rows replaced by the position after one of the row's"
             " labelled moves, drawn uniformly, trained only on its value: 1 minus the move's win"
-            " chance for the new side to move (item 24); needs --labels"
+            " chance for the new side to move (item 24 in docs/plan.md); needs --labels"
         ),
     )
     _add_workspace_arguments(train_games)

@@ -1,4 +1,4 @@
-"""Carrying a solver move's thinking into the next solver move, zero shot (backlog item 16).
+"""Carrying a solver move's thinking into the next solver move, zero shot (backlog item 16 in docs/plan.md).
 
 Whole-puzzle solving as ``evaluate-full-puzzles`` scores it, except that H0 of every solver move
 after the first can start from the previous move's final state. The solver keeps the side to

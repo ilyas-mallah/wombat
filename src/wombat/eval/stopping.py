@@ -1,4 +1,4 @@
-"""Stopping rules for the recurrent steps, judged without training (backlog item 15).
+"""Stopping rules for the recurrent steps, judged without training (backlog item 15 in docs/plan.md).
 
 Every position is stepped once to ``MAX_STEPS``, keeping the legal argmax and the change of the
 policy after each step. A rule picks, per position, the step whose argmax is played. Games are
