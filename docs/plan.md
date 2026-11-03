@@ -2635,3 +2635,129 @@ falls with the interval clear of 0 and over-40 does not rise. The gain is
 also stated as an equivalent training multiplier (x0.85 per doubling on the
 scaling curve). Passing pilots are confirmed at 22,000 steps against v29a
 before anything joins the recipe.
+
+## Item 28: L2 cooled at T = 64 against itself at T = 1 (registered 2026-11-03, before the run)
+
+Gap: every game result so far is at T8 against Stockfish, and the plan's
+thinking-budget evidence is on puzzles and the error tail. Whether extra
+thinking itself wins games was never played. The v1 gate asks for T = 64
+beating T = 1 by 100 Elo in 1,000 paired games on two seeds. This is the
+first measurement of that comparison, on one checkpoint and one seed, so it
+cannot meet the gate.
+
+Tooling: `wombat evaluate-match` (Cute Chess, `wombat uci --checkpoint
+--device`). Two changes made a run possible. The engine now reports its value
+as `info ... score cp` because Cute Chess applies `-maxmoves` only when an
+engine reports a score (without it two of six dry-run games ran past 300
+plies, one to 718). The command also runs the current interpreter instead of
+a hardcoded executable name.
+
+Design (fixed before the run):
+- Players: L2 cooled twice, one process each, `ReasoningSteps` 64 against 1,
+  both on the GPU (RTX 3070 Ti), the same weights and the same move rule
+  (highest legal logit, the 0.3 draw guard of the ladders). The move choice
+  is deterministic.
+- Budget limits: there is no clock or node limit, because the engine ignores
+  `go` arguments and thinks exactly T steps (`tc=inf`). The thinking budget
+  is T. A game ends at mate, stalemate, insufficient material, the fifty-move
+  rule, a third repetition, or as a draw after 150 full moves (300 plies, the
+  cap of `play-stockfish`).
+- Openings: the first 150 of `select_openings` on `games-v1/test` with seed 0
+  (balanced, 26+ pieces). They are the same openings, in the same order, as
+  the first 150 of the 200 used in the ladders and the 1700 matches. Each
+  opening is played twice with the colours swapped, 150 pairs, 300 games.
+- Size: the ladders used 100 games per level and the 1700 checks 400 to 800.
+  A dry run of 6 openings (12 games) scored 0.833 with pair interval 0.739
+  to 0.928, which at 150 pairs gives a half-width near 0.03 (about 25 Elo).
+  300 games take about 19 s each at concurrency 3 (12 games in 231 s), 1.6
+  hours. The 1,000 games of the gate would take 5.3 hours at 1.4 GB per
+  engine process, so they are not played here.
+- Concurrency 3 (memory bound), seed 0.
+
+Measure: score of T = 64 per game and its 95% interval from the per-opening
+pair variance (`pair_statistics`, as in the Stockfish matches), and the Elo
+difference with that interval.
+
+Pass marks (fixed now):
+- Extra thinking adds in play: the lower end of the score interval is above
+  0.500.
+- It reaches the gate's size: the lower end is at least 0.640 (100 Elo).
+- Otherwise, if the interval contains 0.500 the README keeps "no measured
+  gain", and if the upper end is below 0.500 the extra steps hurt and it
+  says so.
+
+### Item 28 result (2026-11-03)
+
+T = 64 scored 0.928 per game (+260 =37 -3 over 300 games, 150 openings with
+both colours), 95% interval 0.906 to 0.951, about +445 Elo (+393 to +516).
+Both pass marks are met: the lower end is above 0.500 and above 0.640. The
+run took 45 minutes, about half the 1.6 hours registered, because games
+averaged 88 plies and 20 of 300 hit the cap. One checkpoint and one opening
+set, so the v1 gate's 1,000 games on two seeds is still open, and T = 64
+was not played against T = 8.
+
+## Item 29: L2 cooled at T = 64 and T = 8 in games (registered 2026-11-03, before the runs)
+
+Gap: item 28 showed that T = 64 beats T = 1 (0.928 per game), which mostly
+shows that more steps than one help. The training ran the network at about
+T = 8 and the earlier evaluations found gains stop at the trained depth
+(Lichess accuracy peaks near T = 12 and falls by T = 32). Two matches were
+not played: whether compute past the trained depth adds playing strength or
+hurts, and how much of item 28's gain is already there at the trained depth.
+
+Design (the same method as item 28, fixed before the runs): L2 cooled for
+both players, one process each on the GPU, `ReasoningSteps` set per player,
+the same move rule, the first 150 openings of `select_openings` on
+`games-v1/test` with seed 0, both colours (300 games), 300-ply cap, no
+adjudication, concurrency 3, one match at a time.
+
+- Match A: T = 64 (scored) against T = 8.
+- Match B: T = 8 (scored) against T = 1.
+
+Measure: score of the scored engine per game with its 95% interval from the
+per-opening pair variance, and the Elo difference with that interval.
+
+Pass marks (fixed now). Match A:
+- Compute past the trained depth adds strength: the lower end of the score
+  interval is above 0.500.
+- It hurts: the upper end is below 0.500.
+- Otherwise no measured difference at this size. Then T = 16 and T = 32 are
+  each played against T = 8 the same way (matches C and D) to see where the
+  curve turns. If A is decided either way, C and D are not played.
+
+Match B:
+- The trained depth beats one step: the lower end is above 0.500.
+- Most of item 28's gain is already there at T = 8: the point estimate of the
+  Elo difference is at least half of item 28's +445 (+223, score 0.78).
+  Below that, steps past 8 contribute the larger part.
+- A consistency check, not a pass mark: Elo(A) + Elo(B) against item 28's
+  +445. A large mismatch means Elo from different pairings is not additive
+  here and the three matches are read separately.
+
+Not shown whatever the outcome: one checkpoint, one opening set, 300 games
+per match, a deterministic move rule, so no statement about other
+checkpoints or seeds and not the v1 gate (1,000 paired games on two seeds).
+
+### Item 29 result (2026-11-03)
+
+Match A, T = 64 against T = 8: T = 64 scored 0.305 per game (+77 =29 -194
+over 300 games, 150 openings with both colours), 95% interval 0.260 to
+0.350, about -143 Elo (-182 to -107). The upper end is below 0.500, so
+compute past the trained depth hurts in play. C and D were not played, as
+registered. 59.5 minutes, 111 plies per game on average.
+
+Match B, T = 8 against T = 1: T = 8 scored 0.968 per game (+281 =19 -0),
+95% interval 0.954 to 0.982, about +594 Elo (+528 to +699). The lower end is
+above 0.500 and the point estimate is above +223, so all of item 28's gain
+is there at the trained depth. T = 8 beat T = 1 by more than T = 64 did
+(0.968 against 0.928, intervals not overlapping). 13 minutes, 76 plies per
+game on average. The Elo at a score near 0.97 is imprecise, and the scores
+are the firmer numbers.
+
+Consistency check: -143 + 594 = +451 against item 28's +445, so Elo adds
+across the three pairings here.
+
+Limits as registered: one checkpoint, one opening set, 300 games per match,
+a deterministic move rule. The v1 gate (T = 64 beats T = 1 by 100 Elo over
+1,000 paired games on two seeds) is met in sign and size by item 28 but not
+in game count or seeds.
