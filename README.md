@@ -5,10 +5,11 @@ more steps of computation per position? The network is a small transformer whose
 "Thinking longer" means running the same core more times on a hidden state that persists between steps. It is written
 in PyTorch.
 
-The project is paused. The last experiment ran on 2026-09-27. The central idea is not proven, and the test it was built
-around was never run. That test was registered before any training. It asked that T = 64 steps beat T = 1 by 100 Elo
-over 1,000 paired games of one checkpoint, on two seeds. Extra steps help up to the number
-the network was trained for and not beyond. The best checkpoint trails DeepMind's ChessBench 9M model by a wide margin.
+The project is paused. The last training experiment ran on 2026-09-27. The test the idea was built around was
+registered before any training. It asked that T = 64 steps beat T = 1 by 100 Elo over 1,000 paired games of one
+checkpoint, on two seeds. A smaller version of it was played afterwards: L2 at T = 64 scored 0.928 against itself at
+T = 1 over 300 games, about +445 Elo. It is one checkpoint and one seed, so the registered test itself is still open.
+Extra steps help up to the number the network was trained for and not beyond. The best checkpoint trails DeepMind's ChessBench 9M model by a wide margin.
 `docs/plan.md` records the failed experiments as plainly as the ones that worked.
 
 ## The question
@@ -110,8 +111,11 @@ L2's validation gain from T = 1 to T = 8 grew with training. It was +7.2 points 
 
 ### What did not work
 
-The registered success test was never run. It asked that T = 64 beat T = 1 by 100 Elo over 1,000 paired games on two
-training seeds ("Success gate"). L2 and L3 were each trained on one seed, seed 0 in their configs.
+The registered success test was not run as registered. It asked that T = 64 beat T = 1 by 100 Elo over 1,000 paired
+games on two training seeds ("Success gate"). L2 and L3 were each trained on one seed, seed 0 in their configs. A
+smaller match was played on 2026-11-03: L2 at T = 64 against L2 at T = 1, 150 openings with both colours, 300 games,
+no clock or node limit. T = 64 scored 0.928 (+260 =37 -3), 95% interval 0.906 to 0.951, about +445 Elo (+393 to +516).
+It is one checkpoint, one set of openings and one seed, and T = 64 was not played against T = 8.
 
 No model gained beyond its trained depth. Pilots v10 to v12 failed gate E1, v13 failed F2 and v14 failed F2'. Each gate
 asked for gains past the trained depth (sections "v10 outcome" to "v14 outcome"). L2's Lichess accuracy peaks at 88.8
@@ -152,8 +156,8 @@ with training ("ChessBench 9M on our held-out data", "Goal and backlog", "Evalua
 
 ## What is not shown
 
-Recurrence was not shown to make Wombat stronger with more compute. The gains stop at the trained depth, and the
-registered T = 64 against T = 1 match was never played.
+Recurrence was not shown to make Wombat stronger with more compute beyond the trained depth. The 300-game match of
+T = 64 against T = 1 is one checkpoint on one seed, and the registered 1,000-game, two-seed test was not played.
 
 Wombat was not shown to beat a feedforward network of the same size.
 
