@@ -157,7 +157,7 @@ def test_each_position_reads_the_copy_of_its_bucket() -> None:
     with torch.no_grad():
         before = model(pieces, state, 1, include_move_values=True)
         for layer in model.phase_layers():
-            layer.weight.unflatten(0, (BUCKETS, -1))[2].add_(0.5)
+            layer.weight.unflatten(0, (BUCKETS, -1))[2].add_(2.0)
         after = model(pieces, state, 1, include_move_values=True)
     for reference, tensor in zip(before, after, strict=True):
         moved = (reference != tensor).reshape(len(pieces), -1).any(1)
