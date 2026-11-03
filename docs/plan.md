@@ -2,7 +2,7 @@
 
 This is the working plan and log of the project, kept in the order it was written between 2026-09-14 and 2026-09-27.
 Each experiment's gate is written before its run, and the outcome is appended afterwards. Paths such as `runs/...`
-and `data/...` point to folders that are not part of this repository. The commit hashes it quotes belong to the original development history, which is not published.
+and `data/...` point to folders that are not part of this repository.
 
 ## Objective
 
@@ -1029,7 +1029,7 @@ Gates, paired 95% intervals on the 2,000 positions:
 - L2: on 3+ puzzles T16 beats T8.
 - Reported: blunder rate, puzzle rating, Elo, and T32 against the best T.
 
-Match rules corrected (2026-09-23, `1a81e5d`): games against Stockfish ended
+Match rules corrected (2026-09-23): games against Stockfish ended
 as soon as the side to move could claim a threefold repetition, including by
 a move it had not played. The play-time guard only avoided repeating a
 third time itself. Matches now draw only after a real third occurrence or at
@@ -1051,7 +1051,7 @@ labelled positions (`train-labels`), with `--steps 120000 --stop-after
 accuracy, 10.5% blunders).
 
 Step-12,000 ladder (v16, T8, corrected rules, Stockfish limited to 50,000
-nodes per move instead of time, `d5e47bc`), 100 paired games each. Against
+nodes per move instead of time), 100 paired games each. Against
 UCI_Elo 1320 score 0.560 (about 1,362), 1500 score 0.280 (about 1,336), 1700
 score 0.150 (about 1,399). Full-strength Stockfish at 50,000 nodes won all
 100. The three anchors agree on roughly 1,350 to 1,400.
@@ -1486,8 +1486,7 @@ accuracy, read here as full-solution puzzles at the best T, must not go down
 
 ## v24 pilot: direction-aware attention (registered 2026-09-24, before training)
 
-Backlog item 13 (`--relative-attention`, commits e67e2ce, 770457a,
-222716d). It learns key and value vectors per recurrent block and head for
+Backlog item 13 (`--relative-attention`). It learns key and value vectors per recurrent block and head for
 the 9 king-step offsets (plus one for the board memory's state token), zero
 initialised. That is 15,360 parameters at width 384, with about 13% slower
 graphed training. v24a is v21a's flags plus the option (6,000 steps with the
@@ -1506,7 +1505,7 @@ beside a report and was restarted alone as `runs/v24a-r`.
 
 ## v25 pilot: state-generated attention bias (registered 2026-09-24, before training)
 
-Backlog item 14 (`--state-attention-bias`, commits 8ee5634 and 4dd5b43).
+Backlog item 14 (`--state-attention-bias`).
 A smolgen-style per-head 64x64 bias is generated from H's square tokens in
 every block at every step, zero initialised. It has 188,096 parameters at
 width 384, of which about 72,500 can learn under the king mask. v25a is
@@ -1547,7 +1546,7 @@ under v26's rule against each single change.
 
 ## v27 pilot: HL-Gauss value heads (registered 2026-09-24, before training)
 
-Backlog item 8 (`--value-bins`, commits 26184e2 and f1ae8de). Position
+Backlog item 8 (`--value-bins`). Position
 value and per-move values become 64-bin distributions trained with HL-Gauss
 (sigma 0.75 bins), read out as expected values on the old -1..1 scale. That
 adds 73,535 parameters. Gap: the per-move values are weak (choosing by them
@@ -1833,7 +1832,7 @@ still in warmup. Saturated softmax attention stops the gradient through
 attention, and the steps stop contributing (T1 equals T8 after step
 3,000).
 
-Fix: `--qk-norm` (commit 9f3b73d, repaired in 0d90caa) RMS-normalizes each
+Fix: `--qk-norm` RMS-normalizes each
 head's queries and keys with a learned gain before their product
 (ViT-22B, OLMo 2), which bounds the logits. Two pilots on v29a's schedule
 (22,000 steps plus the 2,000-step cooldown, 4.0M labels), on the 5090
@@ -2050,8 +2049,7 @@ training length, so width stays 384. The widths are compared again only
 at long-run scale if data grows past what width 384 can use. v33a (exact
 depth first) is training on the 5090 from 18:34.
 
-v34 as built (commits 4e253ea, 37121ec, d913032, 203ec15, 8.05M
-parameters):
+v34 as built (8.05M parameters):
 - M is a copy of the present board memory, reset at the start of each line.
 - 12 workspace tokens persist across lines and attend globally to B, M and
   themselves every step.
@@ -2166,7 +2164,7 @@ Item 22 correction and start (23:05): ChessBench shuffled individual
 action-value records across all 2,148 shards (1.23 TB, about 17B records
 over 578M positions). A position's moves are spread over about 29
 shards, and no subset of shards holds complete positions. The importer
-(`import-chessbench`, commits 980eb34 and e558694) therefore streams every
+(`import-chessbench`) therefore streams every
 shard and keeps a hash-chosen 5.2% of positions (about 30M). It deletes each
 shard after reading it and joins the moves per position at the end. It keeps
 only positions whose labelled moves are exactly their legal moves.
@@ -2301,7 +2299,7 @@ P24a baseline (L2 cooled's value head on the child of every legal move, T8,
 valued within 10 points of the best child (median gap 0.299). The
 best-valued child is such a blunder in 10.2% of positions, worse than the
 policy's 5.1%. P24a passes (a) if the first number falls to 4% or less.
-Code: commits c4ac7dd and 4c4699b (`--child-value-share`, `--init-from`).
+Code: `--child-value-share` and `--init-from`.
 P24a is queued after L3's cooled branch.
 
 Item 19 verdict (L3 cooled against L2 cooled, both 100,000 steps plus the
@@ -2373,8 +2371,8 @@ train 972, puzzles-v1 train 28, 94% of them within the first ten moves).
 They are left out, so the screen scores 54,621 positions, 42,242 of them
 live. `evaluate-game-errors` plays the argmax policy over legal moves at
 each depth, or the 9M by its own rule without game history. It saves
-per-position losses. `compare-game-errors` pairs two runs (commits
-a95968d, 79e6bd1, reports in `runs/game-errors`). Live positions, share
+per-position losses. `compare-game-errors` pairs two runs (reports
+in `runs/game-errors`). Live positions, share
 of moves losing over 10, 20 and 40 win points, with 95% intervals for
 the tail:
 
