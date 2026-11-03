@@ -324,7 +324,7 @@ Acceptance:
 
 ## First executable slice
 
-The first work session should implement only M0-M2 scaffolding and stop before real data download or training:
+The first slice implements only M0-M2 scaffolding and stops before real data download or training:
 
 1. Bootstrap the package, tests, configs, ignores, and `doctor` command.
 2. Implement and exhaustively test board canonicalization, move encoding, decoding, and legal masks.
@@ -395,8 +395,9 @@ separated from ordinary network depth. Its base policy (24% top-1, 13%
 puzzles) is also too weak for extra compute to refine. v6 tests the compute
 question on forcing Lichess puzzle lines. There lookahead demonstrably matters
 and labels are clean. It follows the Deep Thinking recipe that has reported
-test-time iteration gains on chess puzzles, and the `reasoner` findings on
-stability and objectives.
+test-time iteration gains on chess puzzles, and the findings on
+stability and objectives of `reasoner`, an earlier project that is not part of
+this repository.
 
 Design:
 
@@ -1288,8 +1289,7 @@ Each pilot: 5,000 steps from v16's recipe plus one change, then a
 1,000-step cooldown (protocol above). Then come the strength report and the
 full-solution puzzle report on `data/eval/external-benchmark`, judged
 against the cooled v15d baseline (81.6 best Lichess accuracy). New ideas go
-into the backlog with a named gap and a gate before they run. DeepMind's
-released source is in the scratchpad clone for reference.
+into the backlog with a named gap and a gate before they run.
 
 When every backlog item has a verdict and no justified idea remains: the
 long run. The best accepted recipe for about 100,000 steps ending in a
@@ -1353,8 +1353,7 @@ best T is higher (paired interval above 0). Otherwise it uses width 256.
 
 A survey of reference sources adds the items below, in order of expected gain
 per cost. It covered lczero-training (and Monroe's fork), Maia-3/Chessformer,
-searchless_chess, Huginn, TRM, Deep Thinking and the Leela look-ahead studies
-(clones in the scratchpad `refs` folder).
+searchless_chess, Huginn, TRM, Deep Thinking and the Leela look-ahead studies.
 
 12. Surprise-weighted sampling (Leela diff focus, KataGo policy surprise
     weighting). Half the draws are uniform, half weighted by the cooled
@@ -1456,14 +1455,13 @@ surprise scoring, v20 training, an evaluation and the visualizer. Nothing
 was corrupted, and each resumes from disk when restarted:
 
 - v20: killed at step 1,000 (validation T8 55.0 against v16's 43.6 at the
-  same step). It must be rerun from scratch with the same command.
+  same step).
 - Labelling `train-labels-rest20k`: 122 of about 1,219 chunks (610,000
-  positions) at 117 positions per second. The same command resumes.
-- Surprise scoring: 3,604,480 of 3,999,041 game positions, no puzzles. The
-  same command resumes.
+  positions) at 117 positions per second.
+- Surprise scoring: 3,604,480 of 3,999,041 game positions, no puzzles.
 - Visualizer: stopped.
 
-These jobs stay stopped until restarted by hand. v22a finished before the
+v22a finished before the
 stop, at step 22,000 with its cooldown. Its best Lichess accuracy is 84.8 at
 T12 (10.6% blunders, puzzle rating 1,741). Full-solution puzzles are 67.7,
 68.3, 68.7 and 68.9% at T8, T12, T16 and T32. v22b, its width-256 pair, is a
@@ -1616,8 +1614,7 @@ Backlog status at 08:07 (2026-09-24):
   value or mix (item 3, again on v27a), stopping rules and warm start
   (items 15 training-free, 16), more puzzle batches (v28a), move-graph
   attention (v18/v18b), reply head (v17).
-- Waiting on a manual restart (stopped by the 04:28 memory
-  stop): labelling the remaining 6.1M positions (item 9, needed for the long
+- Interrupted by the 04:28 memory stop: labelling the remaining 6.1M positions (item 9, needed for the long
   run) and surprise scoring (item 12, v23).
 - Deferred without a pilot, because no named gap on the goal's yardsticks
   supports them now:
@@ -1688,16 +1685,15 @@ environment, and the data (train split, train-labels, puzzles, validation,
 test, external benchmark). An earlier instance in Taiwan was dropped
 because its route to Europe ran at about 80 KB/s.
 
-Running now:
+Running at 15:10:
 
 - L1 at home (`runs/long1`, v27a's recipe, 120,000 steps, 20,000-step
   cooldown, started 14:00 on the 4.0M labels, about 400 positions/s).
 - Labelling of the remaining positions into `train-labels-rest20k` from
   both ends: at home forward (14 engines), on the server backward
   (`--reverse`, 32 engines). A chunk that exists is
-  skipped, so the two meet without repeating work (commit a3ad713). Copy
-  the server's chunks into the local `chunks` folder regularly. When all
-  1,220 exist, run `label-moves` once more locally to finalize, then
+  skipped, so the two meet without repeating work. When all 1,220 exist,
+  `label-moves` runs once more locally to finalize, then
   `merge-move-labels --inputs train-labels train-labels-rest20k --output
   train-labels-all --allow-mixed-nodes`, and resume L1 with `--labels
   data/processed/games-v1/train-labels-all --resume`.
@@ -1999,7 +1995,7 @@ that. Only the final state is graded. Every batch starts from a random
 no-gradient prefix, so extra steps must change nothing (a fixed point is
 the optimum). One 65-token state must hold both the present and any
 imagined future, so the lookahead heads collapse to copying the present.
-The reasoner project (`../reasoner`) is built the other way. It has a
+The reasoner project is built the other way. It has a
 persistent memory M read by address and written by the step, a small
 workspace H that carries the computation, and one shared operator. A
 canonical-state loss pulls the state after hop k toward the encoding of the
@@ -2526,15 +2522,13 @@ for low system memory. On the 32 GB machine a virtual machine held 4.4 GB and
 other programs were running too. Saved and resumable: v35a at its
 step-15,000 checkpoint (`--resume`). The 1700 matches stand at 205 (v33a),
 234 (v29a), 216 (L3, seed 1) and 195 (L2, seed 1) of 400 games, and
-`play-stockfish` resumes them from the PGNs. Restart
-with fewer processes at once (for example v35a alone, then two matches).
+`play-stockfish` resumes them from the PGNs.
 
 Second pause (2026-09-25, late morning): v35a resumed with the v33a and
 v29a matches. All three were paused by hand when available memory fell to
 0.7 GB as another program on the machine grew to 8.7 GB. Saved: v35a's
 checkpoint at step 18,000 (verified loadable), the v33a and v29a match
-PGNs. Resume when the machine has room: v35a alone needs about 10 GB of
-RAM (private), each match about 1.5 GB.
+PGNs. v35a alone needs about 10 GB of RAM (private), each match about 1.5 GB.
 
 v35a result (balance-weighted sampling, v29a's schedule, error-tail screen
 at T8 against v29a, 42,242 live real-game positions): moves losing 20+

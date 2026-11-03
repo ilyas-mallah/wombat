@@ -1,6 +1,6 @@
 # What L2's thinking steps do on hard puzzles
 
-Models: the cooled L2 (`runs/long2-cool/checkpoint.pt`, step 115,000) is the subject; L2 step
+Models: the cooled L2 (`wombat-l2-cooled`, step 115,000) is the subject. L2 step
 50,000 is the comparison. Puzzles: the 10,000 benchmark puzzles with rating 1,500+ and 2+ solver
 moves (4,357). Groups use each model's own stored verdict at its decision depth (T16 cooled, T8
 50k) and the 9M's.
@@ -12,14 +12,13 @@ moves (4,357). Groups use each model's own stored verdict at its decision depth 
 | C | both fail | 742 | 817 | 300 |
 
 All solver positions traced T0 to T32. "Fail@1" means the first wrong move is solver move 1 (B:
-295 cooled, 317 at 50k); "fail@2+" later (205, 181). A mating alternative counts as correct. The
-fp32 rerun reproduces the stored verdicts on all but 1 of 1,300 puzzles per model. Scripts:
-session scratchpad `reasoning/` (`WOMBAT_MODEL=cool` selects the cooled model); JSON outputs in
-`out/` and `out_cool/` there.
+295 cooled, 317 at 50k), and "fail@2+" later (205, 181). A mating alternative counts as correct. The
+fp32 rerun reproduces the stored verdicts on all but 1 of 1,300 puzzles per model. The analysis
+scripts and their JSON outputs are not part of this repository.
 
 ## Mechanism
 
-The loop settles; it does not search. Each step refines one picture of the current position: it
+The loop settles. It does not search. Each step refines one picture of the current position: it
 sharpens the choice among moves proposed at T1 and makes the reply to the favoured move
 decodable, but it never represents the position two or more plies ahead, and its per-step change
 shrinks geometrically, the same on easy and hard puzzles. Moves are scored from origin and
@@ -31,7 +30,7 @@ value head, applied after each legal move, finds the solution in 38 to 46% of B 
 
 ## 1. State dynamics
 
-Per-square change of H in one step, and distance to H32 (A first moves; B and C within 3% of A
+Per-square change of H in one step, and distance to H32 (A first moves, B and C within 3% of A
 at every step):
 
 | Step | 1 | 2 | 3 | 4 | 6 | 8 | 12 | 16 | 17 | 24 | 32 |
@@ -43,7 +42,7 @@ at every step):
 
 At 50k the state is 89% of the way to its fixed point by T8 (policy KL per step 0.005): hence
 T8 = T32. The cooled model has a second slow phase peaking at T17 and T18, just past T16, the
-deepest total the loop saw in training (8 prefix plus 8 graded steps); this is where its puzzle
+deepest total the loop saw in training (8 prefix plus 8 graded steps). This is where its puzzle
 accuracy still moves (79.1% at T8, 80.8% at T32). Difficulty does not change the dynamics: B's
 choices settle later (last argmax change at step 9.1 against 4.6 for A, cooled), but the loop
 does no extra work on them.
@@ -58,7 +57,7 @@ does no extra work on them.
 | B fail@1: top 3 | 0.31 | 0.64 | 0.76 | 0.84 | 0.83 | 0.85 | 0.87 | 0.88 |
 | C fail@1: P(solution) | 0.06 | 0.15 | 0.17 | 0.16 | 0.15 | 0.15 | 0.17 | 0.20 |
 
-(50k: A rises 0.09, 0.42, 0.52, 0.63 by T4, then flat; B fail@1 flat at 0.17 to 0.20 from T2.)
+(50k: A rises 0.09, 0.42, 0.52, 0.63 by T4, then flat. B fail@1 is flat at 0.17 to 0.20 from T2.)
 
 | Failure class | cooled B (500) | cooled C (300) | 50k B (498) |
 | --- | --- | --- | --- |
@@ -68,8 +67,8 @@ does no extra work on them.
 | Never top 3 | 4% | 7% | 7% |
 
 In cooled B the wrong move became the favourite for good at T0 to T1 in 30% of cases, T2 to T3
-16%, T4 to T5 15%, T6 to T8 18%, T9 to T16 22%; 63 of 500 become correct by T32. Groups are
-selected on the answer at the decision depth, so "found then abandoned" is partly noise; the
+16%, T4 to T5 15%, T6 to T8 18%, T9 to T16 22%. 63 of 500 become correct by T32. Groups are
+selected on the answer at the decision depth, so "found then abandoned" is partly noise. The
 robust signal is the flat probability with top-3 membership near 85%.
 
 ## 3. Solutions, wrong moves, and engine depth
@@ -95,7 +94,7 @@ Stockfish (depth 14, single-thread engines):
 | Wrong move loses over 20 points | | 98% | 96% | 98% | 96% |
 | Wrong move fine at depth 2, losing at depth 14 | | 27% | 28% | 27% | 28% |
 
-B is not deeper than A for a searcher; C is. L2's wrong moves turn a won position into a lost
+B is not deeper than A for a searcher, and C is. L2's wrong moves turn a won position into a lost
 one and are mostly refuted within 2 plies.
 
 ## 4. The knowledge is present
@@ -131,7 +130,7 @@ Hybrids (cooled):
 | log p + 8 x child value | 86% | 38% | 40% | 17% |
 
 Each hybrid trades A for B. The groups are selected on the policy, so these rates bound the
-whole-benchmark effect only loosely; a full benchmark run of the blend is the test. The 9M
+whole-benchmark effect only loosely. A full benchmark run of the blend is the test. The 9M
 scores every legal move with its own forward pass, which is the capability this points at.
 
 ## 5. Probes for the continuation (cooled)
@@ -159,10 +158,10 @@ near 0.4. The loop computes the move and the reply for its favoured move, and li
 
 - Attention: king-local by construction, so attention to distant line squares is zero. Gradient
   attribution of the solution's logit is identical across A, B and C (at T16: 14% on the move's
-  own squares, 33% one king step away, 24% two, 29% three or more; line squares 11 to 12%
+  own squares, 33% one king step away, 24% two, 29% three or more, and line squares 11 to 12%
   against a uniform 5% in every group).
 - Line spread on the board: 4.8 king steps (A), 5.0 (B), 4.8 (C).
-- Move-value head as a chooser: 17% on B fail@1, 84% on A; it shares the policy's blind spot.
+- Move-value head as a chooser: 17% on B fail@1, 84% on A. It shares the policy's blind spot.
 - Root value rises from about -0.05 to 0.1 to 0.3 in every group and never reads these positions
   as won.
 
@@ -175,7 +174,7 @@ hidden state that only holds the present position.
    recovers 38 to 46% of B failures. Test the blend at inference first, then teach the policy
    the child-value choice.
 2. Imagined positions in the loop and supervision past the reply (moderate, untested): scratch
-   boards seeded with the model's top candidates; second-move and line-outcome targets from
+   boards seeded with the model's top candidates, plus second-move and line-outcome targets from
    puzzle lines.
 3. Deeper training alone (v32a) is unlikely to close B (moderate): the solution's probability is
    flat from T2 to T32.
@@ -184,5 +183,5 @@ hidden state that only holds the present position.
 
 Groups are selected on the answer at the decision depth, so per-step top-1 rates at that depth
 are 0 or 1 by construction. Traces ran in fp32 while the stored verdicts came from bf16 runs (1
-of 1,300 puzzles differs per model). Probes are linear. Stockfish at depth 14; "needed depth"
+of 1,300 puzzles differs per model). Probes are linear. Stockfish at depth 14, and "needed depth"
 includes its capture search.
