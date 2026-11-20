@@ -183,8 +183,9 @@ learned from about 530 million positions ("Backlog item 19").
 
 ## Checkpoints
 
-Two checkpoints are published as separate model files, `wombat-l2-cooled` and `wombat-l3-cooled` (TODO: add the
-Hugging Face URL once they are uploaded). Each has 5,596,077 parameters. Both are cooled runs at step 115,000. L2 is
+Two checkpoints are published as separate model repositories on Hugging Face,
+[`wombat-l2-cooled`](https://huggingface.co/ilyas-mallah/wombat-l2-cooled) and
+[`wombat-l3-cooled`](https://huggingface.co/ilyas-mallah/wombat-l3-cooled). Each has 5,596,077 parameters. Both are cooled runs at step 115,000. L2 is
 the one behind the results above. L3 adds 14.8 million game positions and is level with L2 in play. Load one with
 `wombat.eval.puzzle_corpus_eval.load_checkpoint`, or serve it with `wombat uci --checkpoint <file>`.
 
